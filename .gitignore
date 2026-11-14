@@ -1,0 +1,23 @@
+*.iml
+.gradle
+/local.properties
+/.idea/caches
+/.idea/libraries
+/.idea/modules.xml
+/.idea/workspace.xml
+/.idea/navEditor.xml
+/.idea/assetWizardSettings.xml
+.DS_Store
+/build
+/app/build
+/.kotlin
+/.home
+/.idea
+/captures
+.externalNativeBuild
+.cxx
+local.properties
+
+# 本地测试音频体积较大，且不应随源码仓库分发
+/testdata/*.mp3
+/testdata/*.wav

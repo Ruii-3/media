@@ -1,0 +1,7 @@
+--------- beginning of main
+11-14 01:45:45.057 D/MusicPlayService( 4172): MediaSession.onPause
+11-14 01:45:46.313 D/MusicPlayService( 4172): MediaSession.onPlay
+11-14 01:45:47.480 D/MusicPlayService( 4172): MediaSession.onSkipToNext
+11-14 01:45:47.647 I/MusicPlayService( 4172): Playback started: 男人海洋
+11-14 01:45:49.655 D/MusicPlayService( 4172): MediaSession.onSkipToPrevious
+11-14 01:45:49.896 I/MusicPlayService( 4172): Playback started: 一个人的寂寞两个人的错

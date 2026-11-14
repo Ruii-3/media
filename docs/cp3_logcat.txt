@@ -1,0 +1,25 @@
+--------- beginning of main
+11-14 01:44:02.619 D/MusicPlayService( 4172): onCreate: MediaBrowserService
+11-14 01:44:02.632 D/MusicPlayService( 4172): MediaSession token ready: true
+11-14 01:44:02.667 D/MusicPlayService( 4172): onBind: android.media.browse.MediaBrowserService
+11-14 01:44:02.755 D/MusicScanner( 4172): query uri=content://media/external/audio/media, selection=is_music != 0 AND duration >= ?, args=45000
+11-14 01:44:02.784 D/MusicScanner( 4172): query returned 3 rows
+11-14 01:44:02.789 D/MusicScanner( 4172): scanMusicFiles: found 3 tracks
+11-14 01:44:02.792 D/MusicPlayService( 4172): onGetRoot: pkg=com.example.automediaplayer uid=10213
+11-14 01:44:02.816 I/MainActivity( 4172): MediaBrowser connected, sessionToken ready
+11-14 01:44:02.831 I/MusicPlayService( 4172): Media tree loaded: 3 items
+11-14 01:44:02.895 D/MusicPlayService( 4172): onLoadChildren: root_id
+11-14 01:44:02.896 D/MusicPlayService( 4172): onLoadChildren: root_id
+11-14 01:44:02.896 I/MainActivity( 4172): 服务端媒体树已更新
+11-14 01:44:02.922 I/MainActivity( 4172): MediaBrowser children loaded: 3
+11-14 01:44:02.923 I/MainActivity( 4172): MediaBrowser children loaded: 3
+11-14 01:44:04.366 D/MusicPlayService( 4172): MediaSession.onPlayFromMediaId: 1000000070
+11-14 01:44:04.930 I/MusicPlayService( 4172): Playback started: 一个人的寂寞两个人的错
+11-14 01:44:05.006 D/MusicPlayService( 4172): onGetRoot: pkg=com.android.systemui uid=10184
+11-14 01:44:05.030 D/MusicPlayService( 4172): onLoadChildren: root_id
+11-14 01:44:07.633 D/MusicPlayService( 4172): MediaSession.onPause
+11-14 01:44:08.748 D/MusicPlayService( 4172): MediaSession.onPlay
+11-14 01:44:09.644 D/MusicPlayService( 4172): MediaSession.onSkipToNext
+11-14 01:44:09.845 I/MusicPlayService( 4172): Playback started: 男人海洋
+11-14 01:44:11.813 D/MusicPlayService( 4172): MediaSession.onSkipToPrevious
+11-14 01:44:12.000 I/MusicPlayService( 4172): Playback started: 一个人的寂寞两个人的错

@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:background="@color/white"
+    android:minWidth="420dp"
+    android:orientation="vertical"
+    android:padding="14dp">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="@string/play_settings"
+        android:textColor="@color/text_primary"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:text="@string/play_settings_hint"
+        android:textColor="@color/text_tertiary"
+        android:textSize="11sp" />
+
+    <RadioGroup
+        android:id="@+id/rg_mode"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:orientation="vertical">
+
+        <RadioButton
+            android:id="@+id/rb_order"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:buttonTint="@color/wisteria_600"
+            android:text="@string/mode_order"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/rb_loop_all"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:buttonTint="@color/wisteria_600"
+            android:text="@string/mode_loop_all"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/rb_loop_one"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:buttonTint="@color/wisteria_600"
+            android:text="@string/mode_loop_one"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+
+        <RadioButton
+            android:id="@+id/rb_shuffle"
+            android:layout_width="match_parent"
+            android:layout_height="34dp"
+            android:buttonTint="@color/wisteria_600"
+            android:text="@string/mode_shuffle"
+            android:textColor="@color/text_primary"
+            android:textSize="14sp" />
+    </RadioGroup>
+
+    <TextView
+        android:id="@+id/tv_mode_desc"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:background="@drawable/bg_chip_lavender"
+        android:padding="8dp"
+        android:text="@string/mode_order_desc"
+        android:textColor="@color/wisteria_700"
+        android:textSize="11sp" />
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:layout_marginTop="6dp"
+        android:background="@color/divider" />
+
+    <com.google.android.material.switchmaterial.SwitchMaterial
+        android:id="@+id/switch_favorites_only"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="2dp"
+        android:buttonTint="@color/wisteria_600"
+        android:text="@string/show_favorites_only"
+        android:textColor="@color/text_primary"
+        android:textSize="14sp"
+        app:useMaterialThemeColors="true" />
+
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/btn_done"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_marginTop="6dp"
+        android:text="@string/settings_done"
+        android:textSize="14sp"
+        app:cornerRadius="16dp" />
+</LinearLayout>

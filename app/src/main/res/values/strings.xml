@@ -1,0 +1,61 @@
+<resources>
+    <string name="app_name">AutoMediaPlayer</string>
+    <string name="app_subtitle">智能座舱 · 本地音乐</string>
+    <string name="now_playing">正在播放</string>
+    <string name="unknown_title">未知曲目</string>
+    <string name="unknown_artist">未知歌手</string>
+    <string name="unknown_album">未知专辑</string>
+    <string name="no_song_selected">选择一首歌开始播放</string>
+    <string name="no_song_selected_hint">从右侧歌曲列表点击任意歌曲</string>
+    <string name="music_list">歌曲列表</string>
+    <string name="scanning">正在扫描音乐…</string>
+    <string name="scan_empty">未找到音乐文件，请插入 U 盘后重新启动应用</string>
+    <string name="music_count">共 %1$d 首</string>
+    <string name="music_count_favorites">共 %1$d 首 · 收藏 %2$d 首</string>
+    <string name="permission_requesting">等待授权后扫描音乐…</string>
+    <string name="permission_required">未授予音频读取权限，无法扫描音乐</string>
+    <string name="notification_permission_denied">未授予通知权限，通知栏控制将不可用</string>
+    <string name="play">播放</string>
+    <string name="pause">暂停</string>
+    <string name="previous">上一首</string>
+    <string name="next">下一首</string>
+    <string name="no_music_to_play">列表为空，请先插入 U 盘并重新启动应用</string>
+    <string name="play_failed">播放失败：%1$s</string>
+    <string name="scan_failed">扫描音乐失败：%1$s</string>
+    <string name="preparing">正在准备播放…</string>
+    <string name="service_not_ready">播放服务未就绪，请稍后再试</string>
+    <string name="select_song_first">请先从右侧列表选择一首歌曲</string>
+
+    <!-- 播放模式 -->
+    <string name="play_mode">播放模式</string>
+    <string name="mode_order">顺序播放</string>
+    <string name="mode_loop_all">列表循环</string>
+    <string name="mode_loop_one">单曲循环</string>
+    <string name="mode_shuffle">随机播放</string>
+    <string name="mode_order_desc">按列表顺序播放，最后一首播完停止</string>
+    <string name="mode_loop_all_desc">播完最后一首自动回到第一首，循环不停</string>
+    <string name="mode_loop_one_desc">当前歌曲自动重播；手动点击下一首仍会换歌</string>
+    <string name="mode_shuffle_desc">随机挑选未播放歌曲，上一首按播放历史回退</string>
+    <string name="mode_changed">已切换为%1$s</string>
+    <string name="current_mode">当前模式：%1$s</string>
+
+    <!-- 播放设置与收藏 -->
+    <string name="play_settings">播放设置</string>
+    <string name="play_settings_hint">选择切歌方式，设置立即生效</string>
+    <string name="settings_done">完成</string>
+    <string name="show_favorites_only">只看收藏歌曲</string>
+    <string name="favorites">收藏</string>
+    <string name="all_music">全部</string>
+    <string name="favorite">收藏歌曲</string>
+    <string name="unfavorite">取消收藏</string>
+    <string name="favorite_added">已加入收藏</string>
+    <string name="favorite_removed">已取消收藏</string>
+    <string name="favorites_empty">还没有收藏歌曲</string>
+    <string name="favorites_empty_hint">点击歌曲右侧的爱心即可收藏</string>
+
+    <!-- 通知 -->
+    <string name="notification_channel_name">紫藤音乐播放</string>
+    <string name="notification_channel_desc">显示正在播放的歌曲与播放控制</string>
+    <string name="notification_idle">紫藤音乐</string>
+    <string name="notification_idle_hint">点击回到播放界面</string>
+</resources>

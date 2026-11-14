@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+
+    <!-- 紫藤色系：由浅到深，界面以白底 + 不同深浅的紫藤色构建层次。 -->
+    <color name="wisteria_50">#FFFAF7FE</color>
+    <color name="wisteria_100">#FFF2EBFB</color>
+    <color name="wisteria_200">#FFE4D7F5</color>
+    <color name="wisteria_300">#FFD0BCEB</color>
+    <color name="wisteria_400">#FFB597DF</color>
+    <color name="wisteria_500">#FF9873CD</color>
+    <color name="wisteria_600">#FF7C56B4</color>
+    <color name="wisteria_700">#FF613F91</color>
+    <color name="wisteria_800">#FF472C6B</color>
+    <color name="accent_heart">#FFE2557B</color>
+
+    <color name="player_background">#FFFAF7FE</color>
+    <color name="divider">#FFEDE4F7</color>
+    <color name="text_primary">#FF2C2140</color>
+    <color name="text_secondary">#FF6E6184</color>
+    <color name="text_tertiary">#FF9A8DAF</color>
+    <color name="text_on_primary">#FFFFFFFF</color>
+    <color name="card_stroke">#FFF0E8F9</color>
+    <color name="card_stroke_selected">#FF9873CD</color>
+    <color name="item_selected_bg">#FFF7F1FE</color>
+</resources>
