@@ -5,11 +5,9 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.ImageButton
 import android.widget.TextView
-import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.RecyclerView
 import com.example.automediaplayer.R
 import com.example.automediaplayer.model.MusicData
-import com.google.android.material.card.MaterialCardView
 
 /**
  * 歌曲列表适配器（第 2 周 UI 优化）。
@@ -27,10 +25,11 @@ class MusicAdapter(
 
     private var favoriteIds: Set<Long> = emptySet()
     private var selectedMusicId: Long? = null
+    private var selectedPosition = -1
     private var recyclerView: RecyclerView? = null
 
     class MusicViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
-        val card: MaterialCardView = itemView.findViewById(R.id.card_music_item)
+        val lyItem: View = itemView
         val selectedIndicator: View = itemView.findViewById(R.id.view_selected_indicator)
         val index: TextView = itemView.findViewById(R.id.tvIndex)
         val songTitle: TextView = itemView.findViewById(R.id.tvSongTitle)
@@ -50,6 +49,7 @@ class MusicAdapter(
         val music = musicList[position]
         val context = holder.itemView.context
         val isSelected = music.id == selectedMusicId
+        if (isSelected) selectedPosition = position
 
         holder.index.text = String.format("%02d", position + 1)
         holder.songTitle.text = music.title
@@ -58,16 +58,8 @@ class MusicAdapter(
         holder.duration.text = music.getFormattedDuration()
 
         holder.selectedIndicator.visibility = if (isSelected) View.VISIBLE else View.GONE
-        holder.card.strokeColor = ContextCompat.getColor(
-            context,
-            if (isSelected) R.color.card_stroke_selected else R.color.card_stroke
-        )
-        holder.card.setCardBackgroundColor(
-            ContextCompat.getColor(
-                context,
-                if (isSelected) R.color.item_selected_bg else R.color.white
-            )
-        )
+        // 由 selector_item.xml 响应 state_selected，整行背景与描边一起变化。
+        holder.lyItem.isSelected = isSelected
 
         val favorite = favoriteIds.contains(music.id)
         holder.favorite.setImageResource(
@@ -76,7 +68,14 @@ class MusicAdapter(
         holder.favorite.contentDescription =
             context.getString(if (favorite) R.string.unfavorite else R.string.favorite)
 
-        holder.itemView.setOnClickListener { onItemClick(music) }
+        holder.itemView.setOnClickListener {
+            val last = selectedPosition
+            selectedMusicId = music.id
+            selectedPosition = position
+            if (last in musicList.indices) notifyItemChanged(last)
+            notifyItemChanged(position)
+            onItemClick(music)
+        }
         holder.favorite.setOnClickListener { onFavoriteClick(music) }
     }
 
@@ -85,6 +84,7 @@ class MusicAdapter(
     /** 全量刷新列表；歌曲数量为个位数到几十首，暂不引入 DiffUtil。 */
     fun updateData(newMusicList: List<MusicData>) {
         musicList = newMusicList
+        selectedPosition = musicList.indexOfFirst { it.id == selectedMusicId }
         notifyDataSetChanged()
     }
 
@@ -97,11 +97,14 @@ class MusicAdapter(
     /** 高亮当前播放曲目；索引可见时自动滚动到该行。 */
     fun setSelectedMusicId(musicId: Long?) {
         if (selectedMusicId == musicId) return
+        val oldPosition = selectedPosition
         selectedMusicId = musicId
-        notifyDataSetChanged()
-        val index = musicList.indexOfFirst { it.id == musicId }
-        if (index >= 0) {
-            recyclerView?.post { recyclerView?.smoothScrollToPosition(index) }
+        val newPosition = musicList.indexOfFirst { it.id == musicId }
+        selectedPosition = newPosition
+        if (oldPosition in musicList.indices) notifyItemChanged(oldPosition)
+        if (newPosition >= 0) {
+            notifyItemChanged(newPosition)
+            recyclerView?.post { recyclerView?.smoothScrollToPosition(newPosition) }
         }
     }
 

@@ -24,7 +24,9 @@ import android.service.media.MediaBrowserService
 import android.util.Log
 import com.example.automediaplayer.R
 import com.example.automediaplayer.manager.PlaylistManager
+import com.example.automediaplayer.manager.StateManager
 import com.example.automediaplayer.model.MusicData
+import com.example.automediaplayer.model.MyPlaybackState
 import com.example.automediaplayer.model.PlayMode
 import com.example.automediaplayer.ui.MainActivity
 import com.example.automediaplayer.util.MusicScanner
@@ -71,12 +73,17 @@ class MusicPlayService : MediaBrowserService() {
         const val KEY_NEW_MODE = "NEW_MODE"
         /** PlaybackState.extras 中携带当前模式，客户端重连后也能恢复。 */
         const val KEY_PLAY_MODE = "PLAY_MODE"
+        const val COMMAND_PLAYBACK_RESTORED = "PLAYBACK_RESTORED"
+        const val KEY_RESTORED_TITLE = "RESTORED_TITLE"
+        const val KEY_RESTORED_PROGRESS = "RESTORED_PROGRESS"
 
         const val EXTRA_DURATION = "duration"
         const val EXTRA_FILE_PATH = "filePath"
         const val EXTRA_ALBUM_ID = "albumId"
 
         private const val PROGRESS_INTERVAL_MS = 500L
+        private const val SAVE_DEBOUNCE_MS = 1000L
+        private const val AUTO_SAVE_INTERVAL_MS = 5000L
     }
 
     private val playlistManager = PlaylistManager()
@@ -85,6 +92,7 @@ class MusicPlayService : MediaBrowserService() {
 
     private var mediaPlayer: MediaPlayer? = null
     private var isPrepared = false
+    private var playbackStarted = false
     private var isForegroundStarted = false
     private var serviceStartedForPlayback = false
     private var pendingMusicId: Long? = null
@@ -95,6 +103,19 @@ class MusicPlayService : MediaBrowserService() {
     private var playlistLoaded = false
     private var scanInProgress = false
     private var pendingPlayMediaId: String? = null
+    private lateinit var stateManager: StateManager
+    private var pendingRestoreState: MyPlaybackState? = null
+    private var restoreAttempted = false
+    private var pendingOnPrepared: (() -> Unit)? = null
+
+    private val saveHandler = Handler(Looper.getMainLooper())
+    private val saveStateRunnable = Runnable { savePlaybackState() }
+    private val autoSaveRunnable = object : Runnable {
+        override fun run() {
+            savePlaybackState()
+            saveHandler.postDelayed(this, AUTO_SAVE_INTERVAL_MS)
+        }
+    }
 
     private val progressRunnable = object : Runnable {
         override fun run() {
@@ -108,12 +129,18 @@ class MusicPlayService : MediaBrowserService() {
     override fun onCreate() {
         super.onCreate()
         Log.d(TAG, "onCreate: MediaBrowserService")
+        stateManager = StateManager(this)
+        pendingRestoreState = stateManager.loadValidPlaybackState()
+        if (pendingRestoreState == null && stateManager.isStateExpired()) {
+            stateManager.clearPlaybackState()
+        }
         notificationManager = getSystemService(NotificationManager::class.java)
         createNotificationChannel()
         initializeMediaSession()
         initializeMediaPlayer()
         // 服务一创建就开始扫描；有权限时通常能在首次订阅前完成。
         loadPlaylistAsync(force = false)
+        startAutoSave()
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -196,11 +223,59 @@ class MusicPlayService : MediaBrowserService() {
                 mediaSession.sendSessionEvent(COMMAND_PLAYLIST_UPDATED, Bundle())
                 Log.i(TAG, "Media tree loaded: ${items.size} items")
 
-                pendingPlayMediaId?.let { mediaId ->
+                val pendingId = pendingPlayMediaId
+                if (pendingId != null) {
                     pendingPlayMediaId = null
-                    playFromMediaId(mediaId)
+                    restoreAttempted = true
+                    playFromMediaId(pendingId)
+                } else {
+                    tryRestorePlaybackState()
                 }
             }
+        }
+    }
+
+    /**
+     * 歌单就绪后再恢复，避免扫描尚未完成时找不到歌曲。
+     * 用户如果已经手点歌曲，pending 播放优先，不会再被恢复逻辑覆盖。
+     */
+    private fun tryRestorePlaybackState() {
+        if (restoreAttempted || !playlistLoaded) return
+        val saved = pendingRestoreState ?: return
+        val queue = playlistManager.getPlaylist()
+        if (queue.isEmpty()) return
+
+        restoreAttempted = true
+        pendingRestoreState = null
+        setPlayMode(saved.playMode)
+
+        val byId = queue.indexOfFirst { it.id == saved.currentMusicId }
+        val index = if (byId >= 0) {
+            byId
+        } else {
+            saved.currentPosition.coerceIn(0, queue.lastIndex)
+        }
+        val music = queue.getOrNull(index) ?: return
+        Log.i(
+            TAG,
+            "restore playback: id=${music.id}, index=$index, " +
+                "progress=${saved.playbackProgress}, isPlaying=${saved.isPlaying}"
+        )
+
+        playMusicAt(index) {
+            val duration = getDuration()
+            val progress = if (duration > 0) {
+                saved.playbackProgress.coerceIn(0, duration)
+            } else {
+                saved.playbackProgress.coerceAtLeast(0)
+            }
+            if (progress > 0) seekTo(progress)
+            if (saved.isPlaying) play() else syncPlaybackState()
+            val extras = Bundle().apply {
+                putString(KEY_RESTORED_TITLE, music.title)
+                putInt(KEY_RESTORED_PROGRESS, progress)
+            }
+            mediaSession.sendSessionEvent(COMMAND_PLAYBACK_RESTORED, extras)
         }
     }
 
@@ -284,10 +359,18 @@ class MusicPlayService : MediaBrowserService() {
                     return@setOnPreparedListener
                 }
                 isPrepared = true
-                prepared.start()
-                ensureForeground()
-                syncPlaybackState()
-                startProgressUpdates()
+                playbackStarted = true
+                val callback = pendingOnPrepared
+                pendingOnPrepared = null
+                if (callback != null) {
+                    callback()
+                } else {
+                    prepared.start()
+                    ensureForeground()
+                    syncPlaybackState()
+                    startProgressUpdates()
+                }
+                scheduleStateSave()
                 Log.i(TAG, "Playback started: ${getCurrentMusic()?.title}")
             }
             setOnCompletionListener { onTrackCompleted() }
@@ -322,6 +405,8 @@ class MusicPlayService : MediaBrowserService() {
             mediaPlayer?.start()
             ensureForeground()
             syncPlaybackState()
+            startProgressUpdates()
+            scheduleStateSave()
         } else {
             val index = playlistManager.getCurrentIndex()
             if (index >= 0) playMusicAt(index)
@@ -332,6 +417,7 @@ class MusicPlayService : MediaBrowserService() {
         if (isPrepared && isPlaying()) {
             mediaPlayer?.pause()
             syncPlaybackState()
+            scheduleStateSave()
         }
     }
 
@@ -353,24 +439,29 @@ class MusicPlayService : MediaBrowserService() {
         }
     }
 
-    fun playFromMediaId(mediaId: String) {
+    fun playFromMediaId(mediaId: String, onPrepared: (() -> Unit)? = null) {
         if (!playlistLoaded) {
             pendingPlayMediaId = mediaId
             loadPlaylistAsync(force = false)
             return
         }
+        restoreAttempted = true
+        pendingRestoreState = null
         val id = mediaId.toLongOrNull() ?: return
         val index = playlistManager.getPlaylist().indexOfFirst { it.id == id }
         if (index >= 0) {
-            playMusicAt(index)
+            playMusicAt(index, onPrepared)
         } else {
             Log.w(TAG, "Media id not found in queue: $mediaId")
         }
     }
 
-    fun playMusicAt(position: Int) {
+    fun playMusicAt(position: Int, onPrepared: (() -> Unit)? = null) {
+        restoreAttempted = true
+        pendingRestoreState = null
         val music = playlistManager.moveToPosition(position) ?: return
         pendingMusicId = music.id
+        pendingOnPrepared = onPrepared
         isPrepared = false
         try {
             mediaPlayer?.reset()
@@ -380,8 +471,10 @@ class MusicPlayService : MediaBrowserService() {
             syncPlaybackState()
             ensureForeground()
             mediaPlayer?.prepareAsync()
+            scheduleStateSave()
         } catch (e: Exception) {
             Log.e(TAG, "playMusicAt failed: ${music.uri}", e)
+            pendingOnPrepared = null
             notifyPlaybackError("播放失败：${e.message}")
         }
     }
@@ -391,12 +484,14 @@ class MusicPlayService : MediaBrowserService() {
         val safePosition = positionMs.coerceIn(0, getDuration())
         mediaPlayer?.seekTo(safePosition)
         syncPlaybackState()
+        scheduleStateSave()
     }
 
     /** 停止但不销毁 MediaPlayer，保留当前曲目，便于再次 play()。 */
     fun stopPlayback() {
         if (isPrepared) mediaPlayer?.pause()
         syncPlaybackState()
+        scheduleStateSave()
     }
 
     fun isPlaying(): Boolean = mediaPlayer?.isPlaying == true
@@ -415,6 +510,7 @@ class MusicPlayService : MediaBrowserService() {
                 mediaPlayer?.start()
             }
             syncPlaybackState()
+            scheduleStateSave()
             return
         }
         if (playlistManager.moveToNext(manual = false)) {
@@ -422,6 +518,7 @@ class MusicPlayService : MediaBrowserService() {
         } else {
             pauseAtEnd()
         }
+        scheduleStateSave()
     }
 
     private fun pauseAtEnd() {
@@ -429,6 +526,7 @@ class MusicPlayService : MediaBrowserService() {
         runCatching { mediaPlayer?.seekTo(0) }
         runCatching { mediaPlayer?.pause() }
         syncPlaybackState()
+        scheduleStateSave()
     }
 
     // ============ 播放模式 ============
@@ -439,6 +537,7 @@ class MusicPlayService : MediaBrowserService() {
         }
         syncPlaybackState()
         sendPlayModeEvent(mode)
+        scheduleStateSave()
     }
 
     fun getPlayMode(): PlayMode = playlistManager.getPlayMode()
@@ -524,6 +623,44 @@ class MusicPlayService : MediaBrowserService() {
     private fun startProgressUpdates() {
         progressHandler.removeCallbacks(progressRunnable)
         progressHandler.post(progressRunnable)
+    }
+
+    // ============ 播放状态持久化 ============
+
+    /** 防抖保存：1 秒内连续拖动进度条或切模式时，只落盘最后一次。 */
+    private fun scheduleStateSave() {
+        if (!::stateManager.isInitialized) return
+        saveHandler.removeCallbacks(saveStateRunnable)
+        saveHandler.postDelayed(saveStateRunnable, SAVE_DEBOUNCE_MS)
+    }
+
+    /** 5 秒保底保存，避免长时间播放时进度从未落盘。 */
+    private fun startAutoSave() {
+        saveHandler.removeCallbacks(autoSaveRunnable)
+        saveHandler.postDelayed(autoSaveRunnable, AUTO_SAVE_INTERVAL_MS)
+    }
+
+    /**
+     * 只有当前确实有歌曲时才保存，防止服务刚创建、歌单尚未扫描完成时
+     * 用 -1 覆盖掉上一次的有效状态。
+     */
+    private fun savePlaybackState() {
+        if (!::stateManager.isInitialized || !playlistLoaded || !playbackStarted) return
+        val music = getCurrentMusic() ?: return
+        val state = MyPlaybackState(
+            currentMusicId = music.id,
+            currentPosition = playlistManager.getCurrentPosition(),
+            playbackProgress = getCurrentPosition().coerceAtLeast(0),
+            playMode = getPlayMode(),
+            isPlaying = isPlaying(),
+            timestamp = System.currentTimeMillis()
+        )
+        stateManager.savePlaybackState(state)
+        Log.d(
+            TAG,
+            "state saved: id=${state.currentMusicId}, progress=${state.playbackProgress}, " +
+                "mode=${state.playMode}, isPlaying=${state.isPlaying}"
+        )
     }
 
     // ============ 前台通知 ============
@@ -615,6 +752,9 @@ class MusicPlayService : MediaBrowserService() {
     }
 
     override fun onDestroy() {
+        // 先保存，再释放 MediaPlayer；强杀不会走这里，但正常销毁可兜底。
+        savePlaybackState()
+        saveHandler.removeCallbacksAndMessages(null)
         progressHandler.removeCallbacksAndMessages(null)
         ioScope.cancel()
         runCatching { mediaPlayer?.stop() }

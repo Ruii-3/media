@@ -18,10 +18,11 @@
     <color name="player_background">#FFFAF7FE</color>
     <color name="divider">#FFEDE4F7</color>
     <color name="text_primary">#FF2C2140</color>
-    <color name="text_secondary">#FF6E6184</color>
-    <color name="text_tertiary">#FF9A8DAF</color>
+    <!-- 车机高对比配色：正文与辅助文字对白底均 >= 4.5:1（WCAG AA）。 -->
+    <color name="text_secondary">#FF5B4C73</color>
+    <color name="text_tertiary">#FF6E6184</color>
     <color name="text_on_primary">#FFFFFFFF</color>
-    <color name="card_stroke">#FFF0E8F9</color>
-    <color name="card_stroke_selected">#FF9873CD</color>
-    <color name="item_selected_bg">#FFF7F1FE</color>
+    <color name="card_stroke">#FFE8DDF5</color>
+    <color name="card_stroke_selected">#FF7C56B4</color>
+    <color name="item_selected_bg">#FFF3EAFD</color>
 </resources>

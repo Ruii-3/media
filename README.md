@@ -1,7 +1,8 @@
 # AutoMediaPlayer（智能座舱本地音乐播放器）
 
-第 3 周：MediaSession 与多屏协同基础。应用已升级为
-“MediaBrowserService 提供内容 + MediaController 发送控制 + MediaSession 统一广播状态”的标准媒体架构。
+第 4 周：车机 UI/UX 优化与状态持久化。应用在
+“MediaBrowserService 提供内容 + MediaController 发送控制 + MediaSession 统一广播状态”的架构上，
+完成 60/40 车机分栏、紫藤白视觉、48–88dp 触控目标，以及歌曲/进度/模式/播放态的强杀恢复。
 
 ## 当前进度
 
@@ -10,9 +11,10 @@
 | 第 1 周 | CP1：权限 → 扫描 → 列表 → 单曲播放 | 已完成 |
 | 第 2 周 | CP2：后台播放、播放队列、四模式、通知栏、UI 优化 | 已完成 |
 | 第 3 周 | CP3：MediaBrowserService、MediaSession、adb 媒体键、多屏消费基础 | 已完成 |
+| 第 4 周 | CP4：车机 UI/UX、设计草图、强杀恢复、状态持久化清单 | 已完成 |
 
-第 3 周验收材料见 `docs/CP3_Acceptance.md`；第 2 周与第 1 周记录分别保留在
-`docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
+第 4 周验收材料见 `docs/CP4_Acceptance.md` 与 `docs/State_Persistence_Checklist.md`；
+第 3、2、1 周记录分别保留在 `docs/CP3_Acceptance.md`、`docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
 
 ## 技术基线
 
@@ -54,6 +56,15 @@
 - 单曲循环仅自然播完时原地重播；手动“下一首”仍换歌。
 - 顺序模式最后一首播完后回到 0 秒并暂停；列表循环自动绕回第一首。
 
+### 播放状态持久化
+
+- `StateManager` 使用 `SharedPreferences` 保存最小状态集合：歌曲 id、列表位置、进度、模式、播放态、时间戳。
+- 保存策略：操作后 1 秒防抖、播放中每 5 秒保底、`onDestroy()` 再兜底。
+- 状态有效期 24 小时；过期、歌曲 id 非法或文件为空时不会恢复，并清理旧值。
+- 服务先等待歌单扫描完成，再按歌曲 id 恢复；id 失效时用列表位置兜底。
+- `prepareAsync()` 成功后 `seekTo()`，再按保存值决定继续播放或保持暂停。
+- 用户手动点歌优先于旧状态恢复，避免启动后被旧歌曲覆盖。
+
 ### 本地扫描与权限
 
 - Android 13+ 使用 `READ_MEDIA_AUDIO`，Android 12 及以下使用 `READ_EXTERNAL_STORAGE`。
@@ -78,12 +89,16 @@ app/src/main/java/com/example/automediaplayer/
 ├── adapter/MusicAdapter.kt          列表展示、当前曲高亮、行内收藏
 ├── manager/FavoriteManager.kt       收藏 id 的 SharedPreferences 持久化
 ├── manager/PlaylistManager.kt       队列、索引、四种切歌算法
+├── manager/StateManager.kt          播放状态读写、24 小时有效期判断
 ├── model/MusicData.kt               音乐元数据 + albumId
 ├── model/PlayMode.kt                四种播放模式与循环顺序
+├── model/MyPlaybackState.kt         可恢复播放状态的最小数据模型
 ├── service/MusicPlayService.kt      MediaBrowserService / MediaPlayer / MediaSession / 通知
 ├── ui/MainActivity.kt               MediaBrowser + MediaController 客户端、权限、UI、收藏
 └── util/MusicScanner.kt             MediaStore 扫描（Dispatchers.IO）
 ```
+
+单元测试：`app/src/test/java/com/example/automediaplayer/manager/StateManagerTest.kt`。
 
 布局：`activity_main.xml`、`item_music.xml`、`dialog_play_settings.xml`；
 紫藤色色板：`res/values/colors.xml`。
@@ -99,20 +114,20 @@ APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 安装到指定模拟器/车机：
 
 ```powershell
-adb -s emulator-5556 install -r app\build\outputs\apk\debug\app-debug.apk
-adb -s emulator-5556 shell pm grant com.example.automediaplayer android.permission.READ_MEDIA_AUDIO
-adb -s emulator-5556 shell pm grant com.example.automediaplayer android.permission.POST_NOTIFICATIONS
-adb -s emulator-5556 shell am start -n com.example.automediaplayer/.ui.MainActivity
+adb -s emulator-5554 install -r app\build\outputs\apk\debug\app-debug.apk
+adb -s emulator-5554 shell pm grant com.example.automediaplayer android.permission.READ_MEDIA_AUDIO
+adb -s emulator-5554 shell pm grant com.example.automediaplayer android.permission.POST_NOTIFICATIONS
+adb -s emulator-5554 shell am start -n com.example.automediaplayer/.ui.MainActivity
 ```
 
 媒体键验证：
 
 ```powershell
-adb -s emulator-5556 shell input keyevent 85   # 播放/暂停
-adb -s emulator-5556 shell input keyevent 87   # 下一首
-adb -s emulator-5556 shell input keyevent 88   # 上一首
-adb -s emulator-5556 shell cmd media_session dispatch next
-adb -s emulator-5556 shell dumpsys media_session
+adb -s emulator-5554 shell input keyevent 85   # 播放/暂停
+adb -s emulator-5554 shell input keyevent 87   # 下一首
+adb -s emulator-5554 shell input keyevent 88   # 上一首
+adb -s emulator-5554 shell cmd media_session dispatch next
+adb -s emulator-5554 shell dumpsys media_session
 ```
 
 模拟器 `/sdcard/Music/` 与仓库 `testdata/` 目前提供 3 首测试曲（不打包进 APK）：
@@ -130,9 +145,19 @@ adb -s emulator-5556 shell dumpsys media_session
 5. 执行 `dumpsys media_session`，展示 `Media button session`、`active=true`、状态与元数据。
 6. 打开右上角设置切换四种模式，验证自定义命令与 `PlaylistManager` 同步。
 7. 点击列表爱心，验证收藏筛选与持久化。
+8. 播放或暂停后等待至少 5 秒，查看 `AutoMediaPlayerPrefs.xml` 中的歌曲、进度、模式和时间戳。
+9. 执行 `adb shell am force-stop com.example.automediaplayer`，重新启动，确认歌曲、进度、模式和播放/暂停态恢复。
+10. 打开 `docs/UI_Design_Sketch.png`，说明 60/40 分栏、80/88dp 按钮、92dp 列表行和 4.5:1 对比度依据。
 
 ## 验收与架构材料
 
+- `docs/CP4_Acceptance.md`：CP4 四项验收清单、车机 UI 规范、强杀恢复实测与抽问准备
+- `docs/State_Persistence_Checklist.md`：CP4-④ 五项勾选结果、原始 SharedPreferences 与 MediaSession 快照
+- `docs/UI_Design_Sketch.png`：带尺寸、字号、触控与对比度标注的 UI 设计草图
+- `tools/generate_week4_ui_sketch.py`：设计草图生成脚本
+- `docs/week4_ui_final.png`、`docs/cp4_settings_fixed.png`：第 4 周车机界面与播放设置截图
+- `docs/cp4_before_kill.png`、`docs/cp4_after_restore.png`、`docs/cp4_restored_paused.png`：强杀恢复证据
+- `docs/cp4_expired.png`、`docs/cp4_empty_state.png`：过期与空状态证据
 - `docs/CP3_Acceptance.md`：CP3 验收清单、MediaSession 三角色、adb 实测记录与抽问准备
 - `docs/week3_component.png`：第 3 周组件图（MediaSession / MainActivity / MusicPlayService）
 - `docs/week3_sequence.png`：第 3 周浏览、播放与控制时序图
@@ -149,10 +174,10 @@ adb -s emulator-5556 shell dumpsys media_session
 
 ## 已知限制与后续
 
-- 播放模式尚未持久化，进程重启后回到顺序模式。
-- `START_STICKY` 只保证服务重建，队列和当前曲目尚未跨进程恢复。
+- `force-stop` 后最多可能丢失约 5 秒进度，这是 1 秒防抖 + 5 秒保底策略的预期代价。
+- 只恢复当前歌曲、列表位置、进度和模式，不保存完整播放历史、封面缓存与系统媒体中心队列。
+- 跨设备拷贝文件后 MediaStore id 可能变化，此时按列表位置兜底。
 - 未接入音频焦点、USB 热插拔监听和方向盘硬按键库。
 - `MediaSession` 尚未调用 `setQueue()`，系统媒体中心的队列视图仍为空。
 - 多屏协同已完成“同一会话可被多个客户端消费”的基础，副驾屏独立界面留待后续扩展。
 - 当前模拟器有 3 首测试曲，可演示多曲切歌；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。
-- 第 4 周按教学实施方案继续推进车机 UI/UX 优化与状态持久化。

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 车机列表项：选中态由 MusicAdapter 的 lyItem.isSelected 驱动。 -->
+<selector xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:state_selected="true">
+        <shape android:shape="rectangle">
+            <solid android:color="@color/item_selected_bg" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/card_stroke_selected" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+    <item>
+        <shape android:shape="rectangle">
+            <solid android:color="@color/white" />
+            <stroke
+                android:width="1dp"
+                android:color="@color/card_stroke" />
+            <corners android:radius="16dp" />
+        </shape>
+    </item>
+</selector>

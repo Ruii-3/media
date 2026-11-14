@@ -321,6 +321,23 @@ class MainActivity : AppCompatActivity() {
                 MusicPlayService.COMMAND_PLAYLIST_UPDATED -> {
                     Log.i(TAG, "服务端媒体树已更新")
                 }
+                MusicPlayService.COMMAND_PLAYBACK_RESTORED -> {
+                    val title = extras?.getString(MusicPlayService.KEY_RESTORED_TITLE).orEmpty()
+                    val progress = extras?.getInt(MusicPlayService.KEY_RESTORED_PROGRESS, 0) ?: 0
+                    if (title.isNotBlank()) {
+                        runOnUiThread {
+                            Toast.makeText(
+                                this@MainActivity,
+                                this@MainActivity.getString(
+                                    R.string.playback_restored,
+                                    title,
+                                    formatDuration(progress.toLong())
+                                ),
+                                Toast.LENGTH_LONG
+                            ).show()
+                        }
+                    }
+                }
             }
         }
     }

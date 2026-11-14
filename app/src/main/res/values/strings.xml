@@ -38,6 +38,7 @@
     <string name="mode_shuffle_desc">随机挑选未播放歌曲，上一首按播放历史回退</string>
     <string name="mode_changed">已切换为%1$s</string>
     <string name="current_mode">当前模式：%1$s</string>
+    <string name="playback_restored">已恢复上次播放：%1$s · %2$s</string>
 
     <!-- 播放设置与收藏 -->
     <string name="play_settings">播放设置</string>
