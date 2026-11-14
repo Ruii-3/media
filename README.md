@@ -81,6 +81,7 @@
 - 播放设置弹窗：四种模式单选、模式说明、只看收藏、完成按钮。
 - 收藏筛选：右上角“全部/收藏”切换，计数显示“共 N 首 · 收藏 M 首”。
 - 收藏通过 `SharedPreferences` 持久化，只保存 MediaStore id。
+- 短屏适配：1920×720 下将当前时间、SeekBar、总时长放在同一行，并压缩卡片内边距与封面尺寸，80/88dp 控制按钮仍完整显示。
 
 ## 目录结构
 
@@ -156,6 +157,7 @@ adb -s emulator-5554 shell dumpsys media_session
 - `docs/UI_Design_Sketch.png`：带尺寸、字号、触控与对比度标注的 UI 设计草图
 - `tools/generate_week4_ui_sketch.py`：设计草图生成脚本
 - `docs/week4_ui_final.png`、`docs/cp4_settings_fixed.png`：第 4 周车机界面与播放设置截图
+- `docs/button_fixed_clean_1920x720.png`：1920×720 短屏适配后的完整按钮截图
 - `docs/cp4_before_kill.png`、`docs/cp4_after_restore.png`、`docs/cp4_restored_paused.png`：强杀恢复证据
 - `docs/cp4_expired.png`、`docs/cp4_empty_state.png`：过期与空状态证据
 - `docs/CP3_Acceptance.md`：CP3 验收清单、MediaSession 三角色、adb 实测记录与抽问准备

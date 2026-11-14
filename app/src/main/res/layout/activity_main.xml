@@ -95,7 +95,7 @@
             android:layout_width="match_parent"
             android:layout_height="match_parent"
             android:orientation="vertical"
-            android:padding="16dp">
+            android:padding="12dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
@@ -144,14 +144,14 @@
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
+                android:layout_marginTop="4dp"
                 android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <com.google.android.material.imageview.ShapeableImageView
                     android:id="@+id/img_cover"
-                    android:layout_width="96dp"
-                    android:layout_height="96dp"
+                    android:layout_width="88dp"
+                    android:layout_height="88dp"
                     android:contentDescription="@string/unknown_album"
                     android:scaleType="centerCrop"
                     android:src="@drawable/ic_album_placeholder"
@@ -199,43 +199,45 @@
                 </LinearLayout>
             </LinearLayout>
 
-            <SeekBar
-                android:id="@+id/player_progress_bar"
-                android:layout_width="match_parent"
-                android:layout_height="32dp"
-                android:layout_marginTop="10dp"
-                android:max="100"
-                android:maxHeight="8dp"
-                android:minHeight="8dp"
-                android:paddingTop="10dp"
-                android:paddingBottom="10dp"
-                android:progress="0"
-                android:progressDrawable="@drawable/seekbar_progress"
-                android:splitTrack="false"
-                android:thumb="@drawable/seekbar_thumb" />
-
             <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginTop="6dp"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
                     android:id="@+id/tv_progress_current"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="52dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical"
+                    android:includeFontPadding="false"
                     android:text="00:00"
                     android:textColor="@color/text_tertiary"
                     android:textSize="16sp" />
 
-                <Space
+                <SeekBar
+                    android:id="@+id/player_progress_bar"
                     android:layout_width="0dp"
-                    android:layout_height="1dp"
-                    android:layout_weight="1" />
+                    android:layout_height="32dp"
+                    android:layout_marginHorizontal="8dp"
+                    android:layout_weight="1"
+                    android:max="100"
+                    android:maxHeight="8dp"
+                    android:minHeight="8dp"
+                    android:paddingTop="10dp"
+                    android:paddingBottom="10dp"
+                    android:progress="0"
+                    android:progressDrawable="@drawable/seekbar_progress"
+                    android:splitTrack="false"
+                    android:thumb="@drawable/seekbar_thumb" />
 
                 <TextView
                     android:id="@+id/tv_progress_max"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
+                    android:layout_width="52dp"
+                    android:layout_height="match_parent"
+                    android:gravity="center_vertical|end"
+                    android:includeFontPadding="false"
                     android:text="00:00"
                     android:textColor="@color/text_tertiary"
                     android:textSize="16sp" />
