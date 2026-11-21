@@ -1,8 +1,9 @@
 # AutoMediaPlayer（智能座舱本地音乐播放器）
 
-第 5 周：音频焦点管理与座舱关键场景。应用在
+第 6 周：质量保证——单元测试与集成测试。应用在
 “MediaBrowserService 提供内容 + MediaController 发送控制 + MediaSession 统一广播状态”的架构上，
-增加音频焦点四态处理、USB 热插拔、副驾屏控制器、厂商方向盘硬按键与座舱场景模拟入口。
+已具备音频焦点、USB 热插拔、副驾屏与厂商硬按键；本周补齐 JUnit/MockK/Mockito/Robolectric
+测试体系，形成 32 例自动化测试与集成测试报告初版。
 
 ## 当前进度
 
@@ -13,9 +14,10 @@
 | 第 3 周 | CP3：MediaBrowserService、MediaSession、adb 媒体键、多屏消费基础 | 已完成 |
 | 第 4 周 | CP4：车机 UI/UX、设计草图、强杀恢复、状态持久化清单 | 已完成 |
 | 第 5 周 | CP5：音频焦点、USB 插拔、副驾屏、硬按键、座舱场景演示 | 代码/APK 完成，真机待验收 |
+| 第 6 周 | CP6：单元测试、集成测试报告、最终 APK | 单元测试通过；真机集成待补测 |
 
-第 5 周验收材料见 `docs/CP5_Acceptance.md`、
-`docs/week5_component.png` 与 `docs/week5_focus_sequence.png`；
+第 5 周验收材料见 `docs/CP5_Acceptance.md`、`docs/week5_component.png` 与 `docs/week5_focus_sequence.png`；
+第 6 周测试材料见 `docs/CP6_Acceptance.md`、`docs/CP6_Unit_Test_Report.md` 与 `docs/CP6_Integration_Test_Report.md`；
 第 4、3、2、1 周记录分别保留在 `docs/CP4_Acceptance.md`、`docs/CP3_Acceptance.md`、
 `docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
 
@@ -200,8 +202,21 @@ adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的
 14. 执行 `adb shell dumpsys media_session`，确认主屏与副驾屏共用同一个 active 会话。
 15. 打开 `docs/week5_component.png` 与 `docs/week5_focus_sequence.png` 说明组件关系和焦点时序。
 
+## 测试（第 6 周）
+
+- 运行：`.\gradlew.bat test --console=plain`（Linux/macOS 为 `./gradlew test`）。
+- 结果：32 例、0 失败（PlaylistManager 13、AudioFocusManager 7、StateManager 8、PlaybackFlow 3、模板 1）。
+- HTML 报告：`app/build/reports/tests/testDebugUnitTest/index.html`。
+- 单元测试用 MockK 隔离 `Uri`，用 Mockito 隔离 `AudioManager`/`SharedPreferences`，
+  用 Robolectric 在 JVM 跑 Android 12 框架；跨模块测试使用真实 SharedPreferences。
+- 集成测试初版覆盖真机安装、媒体扫描、副屏探测、硬按键服务绑定；其余 8 项待设备恢复后补测。
 ## 验收与架构材料
 
+- `docs/CP6_Acceptance.md`：CP6 四项验收清单、APK 指纹与抽问准备
+- `docs/CP6_Unit_Test_Report.md`：32 例单元/组件测试清单、框架分工与运行方式
+- `docs/CP6_Integration_Test_Report.md`：集成测试初版（真机 4 项 PASS、8 项 PENDING）
+- `docs/cp6_test_run.log`：`gradlew test` 原始运行日志
+- `docs/cp6_real_device_main.png`：真机主界面（8 首歌曲）截图
 - `docs/CP5_Acceptance.md`：CP5 四项验收清单、焦点四态、USB 流程、双屏记录与抽问准备
 - `docs/week5_component.png`：第 5 周组件图（主屏、副驾屏、MusicPlayService、MediaSession、焦点、USB）
 - `docs/week5_focus_sequence.png`：音频焦点四态与主/副驾屏同步时序图
@@ -237,6 +252,7 @@ adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的
 - 跨设备拷贝文件后 MediaStore id 可能变化，此时按列表位置兜底。
 - 已接入厂商 `hardkey.aar`；非 `com.raite.car.hardkey` 设备会自动跳过，T5-3 硬按键需在真机车机验证。
 - `MediaSession` 尚未调用 `setQueue()`，系统媒体中心的队列视图仍为空。
+- CP6 真机集成测试仍有 8 项 PENDING（播放/后台/模式/强杀/USB/双屏/焦点/硬按键），设备恢复后按 `docs/CP6_Integration_Test_Report.md` 第六节补测。
 - 无真实车机台架时，焦点与 USB 场景可用应用内模拟命令讲解；模拟事件不等于系统真实回调，CP5 验收必须真机。
 - `PassengerActivity` 按教材设为 `exported=false`，只能从应用内入口启动，不能直接用 shell `am start`。
 - 本地 `testdata/` 的 3 首测试曲用于演示多曲切歌（音频文件被 `.gitignore` 排除）；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。
