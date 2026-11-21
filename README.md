@@ -1,8 +1,8 @@
 # AutoMediaPlayer（智能座舱本地音乐播放器）
 
-第 4 周：车机 UI/UX 优化与状态持久化。应用在
+第 5 周：音频焦点管理与座舱关键场景。应用在
 “MediaBrowserService 提供内容 + MediaController 发送控制 + MediaSession 统一广播状态”的架构上，
-完成 60/40 车机分栏、紫藤白视觉、48–88dp 触控目标，以及歌曲/进度/模式/播放态的强杀恢复。
+增加音频焦点四态处理、USB 热插拔、副驾屏控制器、厂商方向盘硬按键与座舱场景模拟入口。
 
 ## 当前进度
 
@@ -12,9 +12,12 @@
 | 第 2 周 | CP2：后台播放、播放队列、四模式、通知栏、UI 优化 | 已完成 |
 | 第 3 周 | CP3：MediaBrowserService、MediaSession、adb 媒体键、多屏消费基础 | 已完成 |
 | 第 4 周 | CP4：车机 UI/UX、设计草图、强杀恢复、状态持久化清单 | 已完成 |
+| 第 5 周 | CP5：音频焦点、USB 插拔、副驾屏、硬按键、座舱场景演示 | 代码/APK 完成，真机待验收 |
 
-第 4 周验收材料见 `docs/CP4_Acceptance.md` 与 `docs/State_Persistence_Checklist.md`；
-第 3、2、1 周记录分别保留在 `docs/CP3_Acceptance.md`、`docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
+第 5 周验收材料见 `docs/CP5_Acceptance.md`、
+`docs/week5_component.png` 与 `docs/week5_focus_sequence.png`；
+第 4、3、2、1 周记录分别保留在 `docs/CP4_Acceptance.md`、`docs/CP3_Acceptance.md`、
+`docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
 
 ## 技术基线
 
@@ -47,6 +50,40 @@
 - 重新扫描通过 `RELOAD_PLAYLIST` 命令触发，权限授予后可即时刷新 U 盘歌曲。
 - 主屏、通知栏、系统媒体中心、方控/蓝牙和副驾屏消费同一个 `MediaSession`。
 - adb 验证：`input keyevent 85/87/88` 与 `cmd media_session dispatch play|pause|next|previous`。
+
+### 音频焦点（第 5 周）
+
+- `AudioFocusManager` 使用 `AudioFocusRequest` 申请 `AUDIOFOCUS_GAIN`，屏蔽 API 细节。
+- `GAIN` 恢复音量；只有焦点丢失前确实在播放，才自动续播。
+- `LOSS_TRANSIENT` 记录播放态后暂停；`LOSS_TRANSIENT_CAN_DUCK` 降音到 30% 不暂停；
+  `LOSS` 永久丢失后停止并释放焦点，不自动恢复。
+- 普通 `pause()` 不释放焦点，避免来电结束后收不到 `GAIN`；`stopPlayback()`/`onDestroy()` 才释放。
+- `PlaybackState.extras` 携带焦点状态，主屏与副驾屏显示“正常 / 降音 30% / 已暂停 / 已丢失”。
+- 主界面“座舱场景演示”可模拟四类焦点事件；模拟不改变系统真实焦点，界面和文档均注明。
+
+### USB 热插拔（第 5 周）
+
+- `USBStorageObserver` 注册 `MOUNTED/UNMOUNTED/REMOVED/BAD_REMOVAL`，并添加 `file` scheme。
+- 插入：重新扫描 MediaStore，`notifyChildrenChanged()` + `COMMAND_PLAYLIST_UPDATED`。
+- 拔出：先停并 reset `MediaPlayer`，再清队列、清元数据、清持久化状态，最后通知所有客户端。
+- 主存储 `/storage/emulated/` 被过滤，只识别可移动卷，避免开机误触发。
+- 无 U 盘时，可用主界面“模拟插入/拔出 U 盘”复用同一业务分支；真实插拔仍由系统广播驱动。
+
+### 副驾屏（第 5 周）
+
+- `PassengerActivity` 是独立第二屏 Activity，不持有 `MediaPlayer`，不重复扫描媒体库。
+- 通过 `MediaBrowser` 订阅同一个 `MusicPlayService`，通过 `MediaController` 控制播放。
+- `MainActivity` 动态查询 `DisplayManager`，使用 `setLaunchDisplayId()` 在副屏启动；
+  无副屏时降级到主屏打开控制器并 Toast 提示，仅用于开发期调试。
+- 主屏切歌/暂停/进度/模式/焦点状态通过 `MediaSession` 自动同步到副驾屏。
+
+### 厂商硬按键（第 5 周 T5-3）
+
+- `app/libs/hardkey.aar`（包名 `raite.car.hardkey`）已通过 `implementation(files("libs/hardkey.aar"))` 接入。
+- `MusicPlayService` 在 `onCreate()` 注册 `HardKeyPolicyManager`，场景 `SCENE_MEDIA_CENTER_CTRL = 550`。
+- `KEYCODE_MODE(509)` 切换播放/暂停，`KEYCODE_SEEK_UP(512)` 下一首，`KEYCODE_SEEK_DOWN(511)` 上一首。
+- 硬按键播放同样先申请音频焦点；服务销毁时注销回调。
+- 非该厂商设备没有对应系统服务时自动跳过并打日志，不会崩溃；adb 媒体键仍可用。
 
 ### 播放队列与模式
 
@@ -112,31 +149,39 @@ app/src/main/java/com/example/automediaplayer/
 
 APK 输出：`app/build/outputs/apk/debug/app-debug.apk`
 
-安装到指定模拟器/车机：
+安装到真机车机（CP5 验收必须真机，`-s` 后的序列号以 `adb devices` 为准）：
 
 ```powershell
-adb -s emulator-5554 install -r app\build\outputs\apk\debug\app-debug.apk
-adb -s emulator-5554 shell pm grant com.example.automediaplayer android.permission.READ_MEDIA_AUDIO
-adb -s emulator-5554 shell pm grant com.example.automediaplayer android.permission.POST_NOTIFICATIONS
-adb -s emulator-5554 shell am start -n com.example.automediaplayer/.ui.MainActivity
+adb -s 设备序列号 install -r app\build\outputs\apk\debug\app-debug.apk
+adb -s 设备序列号 shell pm grant com.example.automediaplayer android.permission.READ_MEDIA_AUDIO
+adb -s 设备序列号 shell pm grant com.example.automediaplayer android.permission.POST_NOTIFICATIONS
+adb -s 设备序列号 shell am start -n com.example.automediaplayer/.ui.MainActivity
 ```
 
 媒体键验证：
 
 ```powershell
-adb -s emulator-5554 shell input keyevent 85   # 播放/暂停
-adb -s emulator-5554 shell input keyevent 87   # 下一首
-adb -s emulator-5554 shell input keyevent 88   # 上一首
-adb -s emulator-5554 shell cmd media_session dispatch next
-adb -s emulator-5554 shell dumpsys media_session
+adb -s 设备序列号 shell input keyevent 85   # 播放/暂停
+adb -s 设备序列号 shell input keyevent 87   # 下一首
+adb -s 设备序列号 shell input keyevent 88   # 上一首
+adb -s 设备序列号 shell cmd media_session dispatch next
+adb -s 设备序列号 shell dumpsys media_session
 ```
 
-模拟器 `/sdcard/Music/` 与仓库 `testdata/` 目前提供 3 首测试曲（不打包进 APK）：
+仓库 `testdata/` 提供 3 首测试曲（不打包进 APK，测试前推到车机 `/sdcard/Music/` 或 U 盘）：
 
 - `周传雄 - 男人·海洋.mp3`（04:02）
 - `雨一直下_华语群星.mp3`（04:54，元数据：雨一直下 / 张宇 / 大人的情歌）
 - `贺一航 - 一个人的寂寞两个人的错 [mqms2].mp3`（03:32）
 
+推送到车机：
+
+```powershell
+adb -s 设备序列号 shell mkdir -p /sdcard/Music
+adb -s 设备序列号 push "testdata\周传雄 - 男人·海洋.mp3" /sdcard/Music/
+adb -s 设备序列号 push "testdata\雨一直下_华语群星.mp3" /sdcard/Music/
+adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的错 [mqms2].mp3" /sdcard/Music/
+```
 ## 演示路径
 
 1. 启动应用，授权音频读取与通知，确认 MediaBrowser 返回 3 首歌曲。
@@ -149,9 +194,20 @@ adb -s emulator-5554 shell dumpsys media_session
 8. 播放或暂停后等待至少 5 秒，查看 `AutoMediaPlayerPrefs.xml` 中的歌曲、进度、模式和时间戳。
 9. 执行 `adb shell am force-stop com.example.automediaplayer`，重新启动，确认歌曲、进度、模式和播放/暂停态恢复。
 10. 打开 `docs/UI_Design_Sketch.png`，说明 60/40 分栏、80/88dp 按钮、92dp 列表行和 4.5:1 对比度依据。
+11. 打开“座舱场景演示”，依次模拟导航降音 30%、GAIN 恢复、来电暂停、GAIN 续播、永久丢失停止。
+12. 真实 U 盘演示插入重扫与播放中拔出清列表；无 U 盘时使用“模拟插入/拔出”，并说明是模拟。
+13. 点击“在副驾屏打开控制器”，展示主屏切歌/暂停/模式变化实时同步到副驾屏。
+14. 执行 `adb shell dumpsys media_session`，确认主屏与副驾屏共用同一个 active 会话。
+15. 打开 `docs/week5_component.png` 与 `docs/week5_focus_sequence.png` 说明组件关系和焦点时序。
 
 ## 验收与架构材料
 
+- `docs/CP5_Acceptance.md`：CP5 四项验收清单、焦点四态、USB 流程、双屏记录与抽问准备
+- `docs/week5_component.png`：第 5 周组件图（主屏、副驾屏、MusicPlayService、MediaSession、焦点、USB）
+- `docs/week5_focus_sequence.png`：音频焦点四态与主/副驾屏同步时序图
+- `tools/generate_week5_diagrams.py`：第 5 周架构图生成脚本
+- `docs/CP5_RealDevice_Test_Guide.md`：真机车机安装、焦点、USB、双屏与硬按键测试取证步骤
+- `app/libs/hardkey.aar`：厂商方向盘硬按键库（T5-3）
 - `docs/CP4_Acceptance.md`：CP4 四项验收清单、车机 UI 规范、强杀恢复实测与抽问准备
 - `docs/State_Persistence_Checklist.md`：CP4-④ 五项勾选结果、原始 SharedPreferences 与 MediaSession 快照
 - `docs/UI_Design_Sketch.png`：带尺寸、字号、触控与对比度标注的 UI 设计草图
@@ -179,7 +235,8 @@ adb -s emulator-5554 shell dumpsys media_session
 - `force-stop` 后最多可能丢失约 5 秒进度，这是 1 秒防抖 + 5 秒保底策略的预期代价。
 - 只恢复当前歌曲、列表位置、进度和模式，不保存完整播放历史、封面缓存与系统媒体中心队列。
 - 跨设备拷贝文件后 MediaStore id 可能变化，此时按列表位置兜底。
-- 未接入音频焦点、USB 热插拔监听和方向盘硬按键库。
+- 已接入厂商 `hardkey.aar`；非 `com.raite.car.hardkey` 设备会自动跳过，T5-3 硬按键需在真机车机验证。
 - `MediaSession` 尚未调用 `setQueue()`，系统媒体中心的队列视图仍为空。
-- 多屏协同已完成“同一会话可被多个客户端消费”的基础，副驾屏独立界面留待后续扩展。
-- 当前模拟器有 3 首测试曲，可演示多曲切歌；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。
+- 无真实车机台架时，焦点与 USB 场景可用应用内模拟命令讲解；模拟事件不等于系统真实回调，CP5 验收必须真机。
+- `PassengerActivity` 按教材设为 `exported=false`，只能从应用内入口启动，不能直接用 shell `am start`。
+- 仓库 `testdata/` 的 3 首测试曲用于演示多曲切歌；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。

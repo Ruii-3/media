@@ -13,6 +13,16 @@
     <!-- 前台服务：保证 Home 退出后音乐继续播放。 -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- 副驾屏为可选能力：没有副屏的设备仍可正常安装和主屏播放。 -->
+    <uses-feature
+        android:name="android.software.activities_on_secondary_displays"
+        android:required="false" />
+
+    <!-- Android 11+ 包可见性：不声明时 getPackageInfo 查不到厂商硬按键服务，
+         真机上会被误判为“未安装”而跳过 T5-3 注册。 -->
+    <queries>
+        <package android:name="com.raite.car.hardkey" />
+    </queries>
 
     <application
         android:allowBackup="true"
@@ -34,6 +44,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- 第 5 周：副驾屏独立控制器，只连接同一个 MediaBrowserService。 -->
+        <activity
+            android:name=".ui.PassengerActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
 
         <!-- 音乐播放前台服务：类型必须声明为 mediaPlayback，Android 14+ 才能合法启动。 -->
         <service

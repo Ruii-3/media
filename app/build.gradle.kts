@@ -12,8 +12,8 @@ android {
         applicationId = "com.example.automediaplayer"
         minSdk = 31
         targetSdk = 37
-        versionCode = 4
-        versionName = "4.0"
+        versionCode = 5
+        versionName = "5.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -35,6 +35,8 @@ android {
 }
 
 dependencies {
+    // 第 5 周：厂商方向盘/中控硬按键分发库（T5-3）。
+    implementation(files("libs/hardkey.aar"))
     implementation(libs.androidx.activity.ktx)
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.constraintlayout)

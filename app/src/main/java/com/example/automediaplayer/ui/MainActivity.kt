@@ -1,8 +1,11 @@
 package com.example.automediaplayer.ui
 
 import android.Manifest
+import android.app.ActivityOptions
 import android.content.ComponentName
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.hardware.display.DisplayManager
 import android.media.MediaMetadata
 import android.media.browse.MediaBrowser
 import android.media.session.MediaController
@@ -14,6 +17,7 @@ import android.os.Handler
 import android.os.Looper
 import android.os.SystemClock
 import android.util.Log
+import android.view.Display
 import android.widget.SeekBar
 import android.widget.Toast
 import androidx.activity.enableEdgeToEdge
@@ -27,6 +31,7 @@ import androidx.recyclerview.widget.LinearLayoutManager
 import com.example.automediaplayer.R
 import com.example.automediaplayer.adapter.MusicAdapter
 import com.example.automediaplayer.databinding.ActivityMainBinding
+import com.example.automediaplayer.databinding.DialogCockpitDemoBinding
 import com.example.automediaplayer.databinding.DialogPlaySettingsBinding
 import com.example.automediaplayer.manager.FavoriteManager
 import com.example.automediaplayer.model.MusicData
@@ -75,6 +80,7 @@ class MainActivity : AppCompatActivity() {
 
     private var settingsDialog: AlertDialog? = null
     private var settingsBinding: DialogPlaySettingsBinding? = null
+    private var cockpitDemoDialog: AlertDialog? = null
     private val mainHandler = Handler(Looper.getMainLooper())
 
     private val progressTicker = object : Runnable {
@@ -148,6 +154,7 @@ class MainActivity : AppCompatActivity() {
             toggleFavorite(music)
         }
         binding.btnSettings.setOnClickListener { showPlaySettings() }
+        binding.btnCockpitDemo.setOnClickListener { showCockpitDemo() }
         binding.btnFilterFavorites.setOnClickListener {
             showFavoritesOnly = !showFavoritesOnly
             applyFilter()
@@ -276,8 +283,21 @@ class MainActivity : AppCompatActivity() {
             musicAdapter.updateFavorites(favorites)
             applyFilter()
             resolveCurrentMusic()
+            if (allMusic.isEmpty()) updateCurrentMusicInfo(null)
             Log.i(TAG, "MediaBrowser children loaded: ${allMusic.size}")
         }
+    }
+
+    /** USB 换盘后媒体树可能整体替换；重新订阅一次，保证列表与队列一致。 */
+    private fun refreshPlaylistSubscription() {
+        val browser = mediaBrowser ?: return
+        val rootId = browser.root ?: return
+        mainHandler.postDelayed({
+            runCatching {
+                browser.unsubscribe(rootId)
+                browser.subscribe(rootId, subscriptionCallback)
+            }.onFailure { Log.w(TAG, "refreshPlaylistSubscription failed", it) }
+        }, 150L)
     }
 
     private fun MediaBrowser.MediaItem.toMusicData(): MusicData? {
@@ -319,7 +339,13 @@ class MainActivity : AppCompatActivity() {
                     }
                 }
                 MusicPlayService.COMMAND_PLAYLIST_UPDATED -> {
-                    Log.i(TAG, "服务端媒体树已更新")
+                    Log.i(TAG, "服务端媒体树已更新，重新订阅")
+                    refreshPlaylistSubscription()
+                }
+                MusicPlayService.COMMAND_FOCUS_CHANGED -> {
+                    extras?.getString(MusicPlayService.KEY_FOCUS_STATE)?.let { state ->
+                        runOnUiThread { updateFocusState(state) }
+                    }
                 }
                 MusicPlayService.COMMAND_PLAYBACK_RESTORED -> {
                     val title = extras?.getString(MusicPlayService.KEY_RESTORED_TITLE).orEmpty()
@@ -426,6 +452,10 @@ class MainActivity : AppCompatActivity() {
         val state = playbackState
         updatePlayButton(state?.state == PlaybackState.STATE_PLAYING)
         state?.extras?.getString(MusicPlayService.KEY_PLAY_MODE)?.let { applyPlayMode(it) }
+        updateFocusState(
+            state?.extras?.getString(MusicPlayService.KEY_FOCUS_STATE)
+                ?: MusicPlayService.FOCUS_NORMAL
+        )
 
         if (state?.state == PlaybackState.STATE_ERROR) {
             val error = state.errorMessage?.toString().orEmpty()
@@ -630,6 +660,104 @@ class MainActivity : AppCompatActivity() {
         PlayMode.SHUFFLE -> R.drawable.ic_mode_shuffle
     }
 
+    private fun updateFocusState(state: String) {
+        val (textRes, colorRes) = when (state) {
+            MusicPlayService.FOCUS_DUCKED -> R.string.focus_ducked to R.color.wisteria_800
+            MusicPlayService.FOCUS_TRANSIENT_PAUSED -> R.string.focus_transient to R.color.wisteria_600
+            MusicPlayService.FOCUS_LOST -> R.string.focus_lost to R.color.accent_heart
+            else -> R.string.focus_normal to R.color.wisteria_700
+        }
+        binding.tvFocusState.setText(textRes)
+        binding.tvFocusState.setTextColor(ContextCompat.getColor(this, colorRes))
+    }
+
+    /**
+     * CP5 模拟入口：模拟器没有真实导航/来电流，这里直接调用服务端与真实
+     * AudioFocus 回调相同的业务分支。界面与文档都明确标注“模拟”。
+     */
+    private fun showCockpitDemo() {
+        if (cockpitDemoDialog?.isShowing == true) return
+        val demoBinding = DialogCockpitDemoBinding.inflate(layoutInflater)
+        val dialog = MaterialAlertDialogBuilder(this)
+            .setView(demoBinding.root)
+            .create()
+        cockpitDemoDialog = dialog
+
+        demoBinding.btnDemoDuck.setOnClickListener {
+            sendFocusSimulation(MusicPlayService.FOCUS_EVENT_CAN_DUCK)
+        }
+        demoBinding.btnDemoTransient.setOnClickListener {
+            sendFocusSimulation(MusicPlayService.FOCUS_EVENT_LOSS_TRANSIENT)
+        }
+        demoBinding.btnDemoGain.setOnClickListener {
+            sendFocusSimulation(MusicPlayService.FOCUS_EVENT_GAIN)
+        }
+        demoBinding.btnDemoLoss.setOnClickListener {
+            sendFocusSimulation(MusicPlayService.FOCUS_EVENT_LOSS)
+        }
+        demoBinding.btnDemoUsbInsert.setOnClickListener { sendUsbSimulation(connected = true) }
+        demoBinding.btnDemoUsbRemove.setOnClickListener { sendUsbSimulation(connected = false) }
+        demoBinding.btnDemoPassenger.setOnClickListener {
+            dialog.dismiss()
+            launchPassengerDisplay()
+        }
+        demoBinding.btnDemoClose.setOnClickListener { dialog.dismiss() }
+        dialog.setOnDismissListener { cockpitDemoDialog = null }
+        dialog.show()
+    }
+
+    private fun sendFocusSimulation(event: String) {
+        val controller = mediaController ?: return showServiceNotReady()
+        val extras = Bundle().apply { putString(MusicPlayService.KEY_FOCUS_EVENT, event) }
+        controller.sendCommand(MusicPlayService.COMMAND_SIMULATE_AUDIO_FOCUS, extras, null)
+    }
+
+    private fun sendUsbSimulation(connected: Boolean) {
+        val controller = mediaController ?: return showServiceNotReady()
+        val extras = Bundle().apply {
+            putBoolean(MusicPlayService.KEY_USB_CONNECTED, connected)
+        }
+        controller.sendCommand(MusicPlayService.COMMAND_SIMULATE_USB, extras, null)
+    }
+
+    /**
+     * 动态查询副屏，避免教材示例中写死 displayId=2 在不同模拟器/车机上失效。
+     * 没有副屏时降级到主屏打开，便于用同一份 APK 录屏说明控制器逻辑。
+     */
+    private fun launchPassengerDisplay() {
+        val displayManager = getSystemService(DisplayManager::class.java)
+        val secondaryDisplays = displayManager?.displays
+            ?.filter { it.displayId != Display.DEFAULT_DISPLAY }
+            .orEmpty()
+        // 优先按显示名识别副驾屏；不同车型的 displayId 顺序不一致，不能写死 2。
+        val secondary = secondaryDisplays.firstOrNull {
+            it.name.contains("passenger", ignoreCase = true) || it.name.contains("副驾")
+        } ?: secondaryDisplays.firstOrNull { it.state == Display.STATE_ON }
+            ?: secondaryDisplays.firstOrNull()
+        val supported = packageManager.hasSystemFeature(
+            PackageManager.FEATURE_ACTIVITIES_ON_SECONDARY_DISPLAYS
+        )
+        val intent = Intent(this, PassengerActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+        }
+        if (!supported || secondary == null) {
+            startActivity(intent)
+            Toast.makeText(
+                this,
+                if (!supported) R.string.passenger_unsupported else R.string.passenger_no_display,
+                Toast.LENGTH_LONG
+            ).show()
+            return
+        }
+        val options = ActivityOptions.makeBasic().setLaunchDisplayId(secondary.displayId)
+        startActivity(intent, options.toBundle())
+        Toast.makeText(
+            this,
+            getString(R.string.passenger_launched, secondary.displayId),
+            Toast.LENGTH_SHORT
+        ).show()
+    }
+
     private fun showPlaySettings() {
         if (settingsDialog?.isShowing == true) return
         val dialogBinding = DialogPlaySettingsBinding.inflate(layoutInflater)
@@ -706,6 +834,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onDestroy() {
         mainHandler.removeCallbacks(progressTicker)
+        cockpitDemoDialog?.dismiss()
+        cockpitDemoDialog = null
         mediaController?.unregisterCallback(mediaControllerCallback)
         mediaController = null
         mediaBrowser?.disconnect()

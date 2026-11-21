@@ -59,4 +59,36 @@
     <string name="notification_channel_desc">显示正在播放的歌曲与播放控制</string>
     <string name="notification_idle">紫藤音乐</string>
     <string name="notification_idle_hint">点击回到播放界面</string>
+
+    <!-- 第 5 周：音频焦点与座舱场景 -->
+    <string name="audio_focus_denied">音频焦点被其他应用占用，暂时无法播放</string>
+    <string name="usb_connected_rescan">U 盘已连接，正在重新扫描</string>
+    <string name="usb_disconnected_cleared">U 盘已断开，播放列表已清空</string>
+    <string name="focus_normal">焦点：正常</string>
+    <string name="focus_ducked">焦点：降音 30%</string>
+    <string name="focus_transient">焦点：已暂停</string>
+    <string name="focus_lost">焦点：已丢失</string>
+    <string name="cockpit_demo">座舱场景演示</string>
+    <string name="cockpit_demo_hint">以下按钮复用真实业务分支；模拟焦点不会改变系统实际音频焦点。</string>
+    <string name="demo_focus_title">音频焦点场景</string>
+    <string name="demo_nav_duck">模拟导航播报（降音 30%）</string>
+    <string name="demo_call">模拟来电（瞬时暂停）</string>
+    <string name="demo_nav_end">模拟播报结束（GAIN 恢复）</string>
+    <string name="demo_other_player">模拟其他播放器抢占（永久丢失）</string>
+    <string name="demo_usb_title">USB 热插拔</string>
+    <string name="demo_usb_insert">模拟插入 U 盘</string>
+    <string name="demo_usb_remove">模拟拔出 U 盘</string>
+    <string name="demo_usb_note">模拟只触发应用内重扫/清空，真实插拔仍由系统广播触发。</string>
+    <string name="demo_multiscreen_title">多屏协同</string>
+    <string name="demo_open_passenger">在副驾屏打开控制器</string>
+    <string name="demo_close">完成</string>
+
+    <!-- 第 5 周：副驾屏 -->
+    <string name="passenger_title">副驾娱乐屏</string>
+    <string name="passenger_subtitle">与主屏共享同一个 MediaSession</string>
+    <string name="passenger_launched">已在副驾屏（display %1$d）打开控制器</string>
+    <string name="passenger_no_display">未检测到副屏，已在主屏打开副驾控制器（可用于 adb 模拟）</string>
+    <string name="passenger_unsupported">当前设备不支持副屏 Activity，已改为主屏演示</string>
+    <string name="passenger_list_empty">副驾屏暂无可播放歌曲</string>
+    <string name="passenger_songs">共 %1$d 首</string>
 </resources>

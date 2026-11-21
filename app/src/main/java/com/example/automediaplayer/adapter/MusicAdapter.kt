@@ -20,7 +20,8 @@ import com.example.automediaplayer.model.MusicData
 class MusicAdapter(
     private var musicList: List<MusicData> = emptyList(),
     private val onItemClick: (MusicData) -> Unit,
-    private val onFavoriteClick: (MusicData) -> Unit
+    private val onFavoriteClick: (MusicData) -> Unit,
+    private val showFavoriteAction: Boolean = true
 ) : RecyclerView.Adapter<MusicAdapter.MusicViewHolder>() {
 
     private var favoriteIds: Set<Long> = emptySet()
@@ -62,6 +63,7 @@ class MusicAdapter(
         holder.lyItem.isSelected = isSelected
 
         val favorite = favoriteIds.contains(music.id)
+        holder.favorite.visibility = if (showFavoriteAction) View.VISIBLE else View.GONE
         holder.favorite.setImageResource(
             if (favorite) R.drawable.ic_heart_filled else R.drawable.ic_heart_outline
         )

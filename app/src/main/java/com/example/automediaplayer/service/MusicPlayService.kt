@@ -22,13 +22,19 @@ import android.os.ResultReceiver
 import android.os.SystemClock
 import android.service.media.MediaBrowserService
 import android.util.Log
+import android.view.KeyEvent
+import android.widget.Toast
 import com.example.automediaplayer.R
+import com.example.automediaplayer.manager.AudioFocusListener
+import com.example.automediaplayer.manager.AudioFocusManager
 import com.example.automediaplayer.manager.PlaylistManager
 import com.example.automediaplayer.manager.StateManager
 import com.example.automediaplayer.model.MusicData
 import com.example.automediaplayer.model.MyPlaybackState
 import com.example.automediaplayer.model.PlayMode
 import com.example.automediaplayer.ui.MainActivity
+import com.example.automediaplayer.ui.USBStatusCallback
+import com.example.automediaplayer.ui.USBStorageObserver
 import com.example.automediaplayer.util.MusicScanner
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -36,6 +42,9 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import raite.car.hardkey.HardKeyPolicyManager
+import raite.car.hardkey.KeyEventCallback
+import raite.car.hardkey.KeyEventExt
 
 /**
  * 第 3 周：MediaBrowserService 版播放服务。
@@ -77,6 +86,26 @@ class MusicPlayService : MediaBrowserService() {
         const val KEY_RESTORED_TITLE = "RESTORED_TITLE"
         const val KEY_RESTORED_PROGRESS = "RESTORED_PROGRESS"
 
+        /** 第 5 周：客户端请求模拟一次音频焦点事件，便于模拟器课堂演示。 */
+        const val COMMAND_SIMULATE_AUDIO_FOCUS = "SIMULATE_AUDIO_FOCUS"
+        /** 第 5 周：客户端请求模拟 U 盘插入/拔出，不影响系统真实挂载。 */
+        const val COMMAND_SIMULATE_USB = "SIMULATE_USB"
+        /** 服务通知客户端：音频焦点状态已变化。 */
+        const val COMMAND_FOCUS_CHANGED = "FOCUS_CHANGED"
+        const val KEY_FOCUS_EVENT = "FOCUS_EVENT"
+        const val KEY_USB_CONNECTED = "USB_CONNECTED"
+        const val KEY_FOCUS_STATE = "FOCUS_STATE"
+
+        const val FOCUS_NORMAL = "NORMAL"
+        const val FOCUS_DUCKED = "DUCKED"
+        const val FOCUS_TRANSIENT_PAUSED = "TRANSIENT_PAUSED"
+        const val FOCUS_LOST = "LOST"
+
+        const val FOCUS_EVENT_GAIN = "GAIN"
+        const val FOCUS_EVENT_LOSS_TRANSIENT = "LOSS_TRANSIENT"
+        const val FOCUS_EVENT_CAN_DUCK = "LOSS_TRANSIENT_CAN_DUCK"
+        const val FOCUS_EVENT_LOSS = "LOSS"
+
         const val EXTRA_DURATION = "duration"
         const val EXTRA_FILE_PATH = "filePath"
         const val EXTRA_ALBUM_ID = "albumId"
@@ -102,11 +131,19 @@ class MusicPlayService : MediaBrowserService() {
 
     private var playlistLoaded = false
     private var scanInProgress = false
+    private var playlistGeneration = 0
+    private var pendingRescan = false
     private var pendingPlayMediaId: String? = null
     private lateinit var stateManager: StateManager
     private var pendingRestoreState: MyPlaybackState? = null
     private var restoreAttempted = false
     private var pendingOnPrepared: (() -> Unit)? = null
+
+    private lateinit var audioFocusManager: AudioFocusManager
+    private var wasPlayingBeforeFocusLoss = false
+    private var currentFocusState = FOCUS_NORMAL
+    private var usbStorageObserver: USBStorageObserver? = null
+    private var hardKeyPolicyManager: HardKeyPolicyManager? = null
 
     private val saveHandler = Handler(Looper.getMainLooper())
     private val saveStateRunnable = Runnable { savePlaybackState() }
@@ -136,11 +173,212 @@ class MusicPlayService : MediaBrowserService() {
         }
         notificationManager = getSystemService(NotificationManager::class.java)
         createNotificationChannel()
+        audioFocusManager = AudioFocusManager(this)
         initializeMediaSession()
         initializeMediaPlayer()
+        // 先挂 USB 监听再扫描，避免“扫描过程中 U 盘插入”漏掉系统广播。
+        initUSBObserver()
+        initHardKeyPolicy()
         // 服务一创建就开始扫描；有权限时通常能在首次订阅前完成。
         loadPlaylistAsync(force = false)
         startAutoSave()
+    }
+
+    // ============ 第 5 周：音频焦点 ============
+
+    /**
+     * 系统音频焦点 → 播放业务语义。
+     *
+     * GAIN                    导航播报/电话结束，恢复音量；只有丢失前在播放才自动续播。
+     * LOSS_TRANSIENT          来电等短暂占用，记住播放态后暂停，焦点仍会回来。
+     * LOSS_TRANSIENT_CAN_DUCK 导航播报，不暂停，只把媒体音量降到 30%。
+     * LOSS                    其他播放器永久接管，停止播放且不自动恢复。
+     */
+    private val audioFocusListener = object : AudioFocusListener {
+        override fun onAudioFocusGained() {
+            Log.i(TAG, "focus GAIN: 恢复音量，wasPlaying=$wasPlayingBeforeFocusLoss")
+            val shouldResume = wasPlayingBeforeFocusLoss
+            wasPlayingBeforeFocusLoss = false
+            mediaPlayer?.setVolume(1.0f, 1.0f)
+            setFocusState(FOCUS_NORMAL)
+            if (shouldResume) play()
+        }
+
+        override fun onAudioFocusLostTransient() {
+            Log.i(TAG, "focus LOSS_TRANSIENT: 记录播放态并暂停")
+            wasPlayingBeforeFocusLoss = isPlaying()
+            if (wasPlayingBeforeFocusLoss) pause()
+            setFocusState(FOCUS_TRANSIENT_PAUSED)
+        }
+
+        override fun onAudioFocusLostTransientCanDuck() {
+            Log.i(TAG, "focus CAN_DUCK: 音量降到 30%，继续播放")
+            mediaPlayer?.setVolume(0.3f, 0.3f)
+            setFocusState(FOCUS_DUCKED)
+        }
+
+        override fun onAudioFocusLostPermanent() {
+            Log.i(TAG, "focus LOSS: 永久丢失，停止播放")
+            wasPlayingBeforeFocusLoss = false
+            stopPlayback()
+            setFocusState(FOCUS_LOST)
+        }
+    }
+
+    /** 已持有焦点直接放行；未持有时现场申请，避免未拿到焦点就抢占扬声器。 */
+    private fun requestAudioFocusBeforePlay(): Boolean {
+        if (audioFocusManager.hasFocus()) return true
+        val granted = audioFocusManager.requestAudioFocus(audioFocusListener)
+        if (granted) {
+            setFocusState(FOCUS_NORMAL)
+        } else {
+            Log.e(TAG, "请求音频焦点失败，播放被拒绝")
+            setFocusState(FOCUS_LOST)
+            Toast.makeText(this, R.string.audio_focus_denied, Toast.LENGTH_SHORT).show()
+        }
+        return granted
+    }
+
+    /** 统一更新焦点状态：写入 PlaybackState.extras，并广播给主屏/副驾屏。 */
+    private fun setFocusState(state: String) {
+        currentFocusState = state
+        if (!::mediaSession.isInitialized) return
+        syncPlaybackState()
+        val extras = Bundle().apply { putString(KEY_FOCUS_STATE, state) }
+        mediaSession.sendSessionEvent(COMMAND_FOCUS_CHANGED, extras)
+    }
+
+    /**
+     * 课堂模拟：不触碰系统真实 AudioFocus，只复用与真实回调完全相同的业务分支。
+     * 文档与界面必须标注“模拟”，不能把模拟日志当成系统焦点真的发生了变化。
+     */
+    private fun simulateAudioFocus(event: String) {
+        Log.i(TAG, "simulateAudioFocus: $event (仅模拟业务分支)")
+        when (event) {
+            FOCUS_EVENT_GAIN -> audioFocusListener.onAudioFocusGained()
+            FOCUS_EVENT_LOSS_TRANSIENT -> audioFocusListener.onAudioFocusLostTransient()
+            FOCUS_EVENT_CAN_DUCK -> audioFocusListener.onAudioFocusLostTransientCanDuck()
+            FOCUS_EVENT_LOSS -> audioFocusListener.onAudioFocusLostPermanent()
+            else -> Log.w(TAG, "unknown focus simulation: $event")
+        }
+    }
+
+    // ============ 第 5 周：USB 热插拔 ============
+
+    /** 广播监听层只报“连接/断开”，具体清队列还是重扫由服务决定。 */
+    private fun initUSBObserver() {
+        usbStorageObserver = USBStorageObserver(
+            this,
+            object : USBStatusCallback {
+                override fun onUSBConnected() = handleUsbConnected()
+                override fun onUSBDisconnected() = handleUsbDisconnected()
+            }
+        )
+        usbStorageObserver?.start()
+    }
+
+    private fun handleUsbConnected() {
+        Toast.makeText(this, R.string.usb_connected_rescan, Toast.LENGTH_SHORT).show()
+        Log.i(TAG, "USB connected: rescan playlist")
+        reloadPlaylist()
+    }
+
+    /**
+     * 拔出顺序不能乱：先让 MediaPlayer 脱离已失效的数据源，再清队列、清元数据，
+     * 最后通知所有客户端刷新。若先清队列再 stop，MediaPlayer 仍可能访问被移除的文件。
+     */
+    private fun handleUsbDisconnected() {
+        Log.i(TAG, "USB disconnected: stop, clear queue, notify clients")
+        // 让正在进行的扫描结果失效，避免扫描结束时又把已拔出 U 盘的文件写回列表。
+        playlistGeneration++
+        pendingRescan = false
+        wasPlayingBeforeFocusLoss = false
+        runCatching { mediaPlayer?.stop() }
+        runCatching { mediaPlayer?.reset() }
+        isPrepared = false
+        playbackStarted = false
+        pendingMusicId = null
+        pendingOnPrepared = null
+        pendingPlayMediaId = null
+        pendingRestoreState = null
+        restoreAttempted = true
+        playlistLoaded = true
+        playlistManager.setPlaylist(emptyList(), 0)
+        audioFocusManager.abandonAudioFocus()
+        currentFocusState = FOCUS_NORMAL
+        stateManager.clearPlaybackState()
+        saveHandler.removeCallbacks(saveStateRunnable)
+        if (isForegroundStarted) {
+            stopForeground(STOP_FOREGROUND_REMOVE)
+            isForegroundStarted = false
+        }
+        updateSessionMetadata()
+        updateSessionState()
+        notifyChildrenChanged(MEDIA_ROOT_ID, Bundle())
+        mediaSession.sendSessionEvent(COMMAND_PLAYLIST_UPDATED, Bundle())
+        Toast.makeText(this, R.string.usb_disconnected_cleared, Toast.LENGTH_SHORT).show()
+    }
+
+    // ============ 第 5 周：厂商硬按键（T5-3） ============
+
+    /**
+     * 方向盘/中控硬按键回调。
+     *
+     * 按键事件最终复用本服务已有的 togglePlayPause/playNext/playPrevious，
+     * 与 UI、MediaSession、通知栏共用同一套播放逻辑；因此按键路径同样会先申请音频焦点。
+     */
+    private val hardKeyEventCallback = object : KeyEventCallback {
+        override fun onKeyEvent(keyEvent: KeyEvent?, param1: Int, param2: Int) {
+            val keyCode = keyEvent?.keyCode
+            Log.i("HardKey", "onKeyEvent key=$keyCode param1=$param1 param2=$param2")
+            when (keyCode) {
+                KeyEventExt.KEYCODE_MODE,
+                KeyEvent.KEYCODE_MEDIA_PLAY_PAUSE -> togglePlayPause()
+
+                KeyEventExt.KEYCODE_SEEK_UP,
+                KeyEvent.KEYCODE_MEDIA_NEXT -> playNext()
+
+                KeyEventExt.KEYCODE_SEEK_DOWN,
+                KeyEvent.KEYCODE_MEDIA_PREVIOUS -> playPrevious()
+
+                else -> Log.d("HardKey", "未映射的硬按键: $keyCode")
+            }
+        }
+
+        override fun onKeyLongPress(keyEvent: KeyEvent?, param1: Int, param2: Int) {
+            // 预留：长按可扩展为快退、语音唤醒等车型自定义动作。
+            Log.i("HardKey", "onKeyLongPress key=${keyEvent?.keyCode} param1=$param1 param2=$param2")
+        }
+    }
+
+    /**
+     * 硬按键库是厂商进程级单例（HardKeyPolicyManager.getInstance）。
+     * 非该厂商车机上包/服务不存在，直接跳过，避免模拟器和普通手机反复重连刷日志。
+     */
+    private fun initHardKeyPolicy() {
+        val vendorInstalled = runCatching {
+            packageManager.getPackageInfo("com.raite.car.hardkey", 0)
+        }.isSuccess
+        if (!vendorInstalled) {
+            Log.i(TAG, "hardkey vendor package not installed; skip hardkey registration")
+            return
+        }
+        hardKeyPolicyManager = runCatching {
+            HardKeyPolicyManager.getInstance(applicationContext)
+        }.onFailure {
+            Log.w(TAG, "HardKeyPolicyManager.getInstance failed", it)
+        }.getOrNull() ?: return
+
+        runCatching {
+            hardKeyPolicyManager?.addKeyEventCallBack(
+                hardKeyEventCallback,
+                HardKeyPolicyManager.SCENE_MEDIA_CENTER_CTRL
+            )
+        }.onSuccess {
+            Log.i(TAG, "hardkey callback registered: scene=SCENE_MEDIA_CENTER_CTRL")
+        }.onFailure {
+            Log.w(TAG, "hardkey callback registration failed", it)
+        }
     }
 
     override fun onBind(intent: Intent): IBinder? {
@@ -202,8 +440,15 @@ class MusicPlayService : MediaBrowserService() {
      * 完成后通过 notifyChildrenChanged 让已订阅客户端重新收到列表。
      */
     private fun loadPlaylistAsync(force: Boolean) {
-        if (scanInProgress || (playlistLoaded && !force)) return
+        if (scanInProgress) {
+            // 扫描中又来了一次 USB 插入/强制重扫：等本轮结束再启动新一轮，
+            // 否则新 U 盘的歌曲可能要等到下次启动才会出现。
+            if (force) pendingRescan = true
+            return
+        }
+        if (playlistLoaded && !force) return
         scanInProgress = true
+        val generation = playlistGeneration
         ioScope.launch {
             val musicList = runCatching {
                 MusicScanner.scanMusicFiles(this@MusicPlayService)
@@ -212,6 +457,16 @@ class MusicPlayService : MediaBrowserService() {
             }.getOrElse { emptyList() }
 
             withContext(Dispatchers.Main) {
+                if (generation != playlistGeneration) {
+                    // USB 在扫描期间被拔出/换盘：旧扫描结果已经失效，丢弃。
+                    scanInProgress = false
+                    Log.i(TAG, "discard stale scan result: generation=$generation")
+                    if (pendingRescan) {
+                        pendingRescan = false
+                        loadPlaylistAsync(force = true)
+                    }
+                    return@withContext
+                }
                 val currentId = getCurrentMusic()?.id
                 playlistManager.setPlaylist(musicList, currentId ?: 0L)
                 playlistLoaded = true
@@ -222,6 +477,12 @@ class MusicPlayService : MediaBrowserService() {
                 notifyChildrenChanged(MEDIA_ROOT_ID, Bundle())
                 mediaSession.sendSessionEvent(COMMAND_PLAYLIST_UPDATED, Bundle())
                 Log.i(TAG, "Media tree loaded: ${items.size} items")
+
+                if (pendingRescan) {
+                    pendingRescan = false
+                    loadPlaylistAsync(force = true)
+                    return@withContext
+                }
 
                 val pendingId = pendingPlayMediaId
                 if (pendingId != null) {
@@ -262,24 +523,29 @@ class MusicPlayService : MediaBrowserService() {
                 "progress=${saved.playbackProgress}, isPlaying=${saved.isPlaying}"
         )
 
-        playMusicAt(index) {
-            val duration = getDuration()
-            val progress = if (duration > 0) {
-                saved.playbackProgress.coerceIn(0, duration)
-            } else {
-                saved.playbackProgress.coerceAtLeast(0)
+        playMusicAt(
+            position = index,
+            requestFocus = saved.isPlaying,
+            onPrepared = {
+                val duration = getDuration()
+                val progress = if (duration > 0) {
+                    saved.playbackProgress.coerceIn(0, duration)
+                } else {
+                    saved.playbackProgress.coerceAtLeast(0)
+                }
+                if (progress > 0) seekTo(progress)
+                if (saved.isPlaying) play() else syncPlaybackState()
+                val extras = Bundle().apply {
+                    putString(KEY_RESTORED_TITLE, music.title)
+                    putInt(KEY_RESTORED_PROGRESS, progress)
+                }
+                mediaSession.sendSessionEvent(COMMAND_PLAYBACK_RESTORED, extras)
             }
-            if (progress > 0) seekTo(progress)
-            if (saved.isPlaying) play() else syncPlaybackState()
-            val extras = Bundle().apply {
-                putString(KEY_RESTORED_TITLE, music.title)
-                putInt(KEY_RESTORED_PROGRESS, progress)
-            }
-            mediaSession.sendSessionEvent(COMMAND_PLAYBACK_RESTORED, extras)
-        }
+        )
     }
 
     fun reloadPlaylist() {
+        playlistGeneration++
         playlistLoaded = false
         loadPlaylistAsync(force = true)
     }
@@ -331,6 +597,17 @@ class MusicPlayService : MediaBrowserService() {
                             setPlayMode(requested ?: getPlayMode().nextMode())
                         }
                         COMMAND_RELOAD_PLAYLIST -> reloadPlaylist()
+                        COMMAND_SIMULATE_AUDIO_FOCUS -> {
+                            val event = extras?.getString(KEY_FOCUS_EVENT)
+                            event?.let { simulateAudioFocus(it) }
+                        }
+                        COMMAND_SIMULATE_USB -> {
+                            if (extras?.getBoolean(KEY_USB_CONNECTED, false) == true) {
+                                handleUsbConnected()
+                            } else {
+                                handleUsbDisconnected()
+                            }
+                        }
                     }
                 }
             })
@@ -389,7 +666,7 @@ class MusicPlayService : MediaBrowserService() {
             ACTION_NEXT -> playNext()
             ACTION_PREVIOUS -> playPrevious()
             ACTION_STOP -> {
-                pause()
+                stopPlayback()
                 stopForeground(STOP_FOREGROUND_REMOVE)
                 isForegroundStarted = false
                 stopSelf()
@@ -402,6 +679,7 @@ class MusicPlayService : MediaBrowserService() {
 
     fun play() {
         if (isPrepared) {
+            if (!requestAudioFocusBeforePlay()) return
             mediaPlayer?.start()
             ensureForeground()
             syncPlaybackState()
@@ -456,15 +734,26 @@ class MusicPlayService : MediaBrowserService() {
         }
     }
 
-    fun playMusicAt(position: Int, onPrepared: (() -> Unit)? = null) {
+    fun playMusicAt(
+        position: Int,
+        onPrepared: (() -> Unit)? = null,
+        requestFocus: Boolean = true
+    ) {
         restoreAttempted = true
         pendingRestoreState = null
+        if (playlistManager.getPlaylist().getOrNull(position) == null) return
+        // 恢复为“暂停态”时只 prepare，不抢占焦点；用户真正点播放时再申请。
+        if (requestFocus && !requestAudioFocusBeforePlay()) return
         val music = playlistManager.moveToPosition(position) ?: return
         pendingMusicId = music.id
         pendingOnPrepared = onPrepared
         isPrepared = false
         try {
             mediaPlayer?.reset()
+            // CAN_DUCK 期间换歌保持 30% 音量；正常状态下新歌恢复到 100%。
+            if (currentFocusState != FOCUS_DUCKED) {
+                mediaPlayer?.setVolume(1.0f, 1.0f)
+            }
             mediaPlayer?.setDataSource(applicationContext, music.uri)
             // 先同步元数据，让客户端在 prepare 期间就能显示歌曲信息。
             updateSessionMetadata()
@@ -490,7 +779,10 @@ class MusicPlayService : MediaBrowserService() {
     /** 停止但不销毁 MediaPlayer，保留当前曲目，便于再次 play()。 */
     fun stopPlayback() {
         if (isPrepared) mediaPlayer?.pause()
-        syncPlaybackState()
+        wasPlayingBeforeFocusLoss = false
+        // 显式停止/系统 onStop 才释放焦点；普通 pause() 必须保留，否则收不到 GAIN。
+        if (::audioFocusManager.isInitialized) audioFocusManager.abandonAudioFocus()
+        setFocusState(FOCUS_NORMAL)
         scheduleStateSave()
     }
 
@@ -561,7 +853,10 @@ class MusicPlayService : MediaBrowserService() {
             isPlaying() -> PlaybackState.STATE_PLAYING
             else -> PlaybackState.STATE_PAUSED
         }
-        val extras = Bundle().apply { putString(KEY_PLAY_MODE, getPlayMode().name) }
+        val extras = Bundle().apply {
+            putString(KEY_PLAY_MODE, getPlayMode().name)
+            putString(KEY_FOCUS_STATE, currentFocusState)
+        }
         mediaSession.setPlaybackState(
             PlaybackState.Builder()
                 .setActions(
@@ -754,6 +1049,15 @@ class MusicPlayService : MediaBrowserService() {
     override fun onDestroy() {
         // 先保存，再释放 MediaPlayer；强杀不会走这里，但正常销毁可兜底。
         savePlaybackState()
+        if (::audioFocusManager.isInitialized) audioFocusManager.abandonAudioFocus()
+        usbStorageObserver?.stop()
+        usbStorageObserver = null
+        // 硬按键库是进程级单例，必须显式移除回调，避免它继续强引用已销毁的 Service。
+        hardKeyPolicyManager?.let { manager ->
+            runCatching { manager.removeKeyEventCallBack(hardKeyEventCallback) }
+                .onFailure { Log.w(TAG, "remove hardkey callback failed", it) }
+        }
+        hardKeyPolicyManager = null
         saveHandler.removeCallbacksAndMessages(null)
         progressHandler.removeCallbacksAndMessages(null)
         ioScope.cancel()
