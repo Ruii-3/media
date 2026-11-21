@@ -168,7 +168,7 @@ adb -s 设备序列号 shell cmd media_session dispatch next
 adb -s 设备序列号 shell dumpsys media_session
 ```
 
-仓库 `testdata/` 提供 3 首测试曲（不打包进 APK，测试前推到车机 `/sdcard/Music/` 或 U 盘）：
+本地 `testdata/` 目录提供 3 首测试曲（MP3 不纳入 Git、不打包进 APK，测试前推到车机 `/sdcard/Music/` 或 U 盘）：
 
 - `周传雄 - 男人·海洋.mp3`（04:02）
 - `雨一直下_华语群星.mp3`（04:54，元数据：雨一直下 / 张宇 / 大人的情歌）
@@ -239,4 +239,4 @@ adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的
 - `MediaSession` 尚未调用 `setQueue()`，系统媒体中心的队列视图仍为空。
 - 无真实车机台架时，焦点与 USB 场景可用应用内模拟命令讲解；模拟事件不等于系统真实回调，CP5 验收必须真机。
 - `PassengerActivity` 按教材设为 `exported=false`，只能从应用内入口启动，不能直接用 shell `am start`。
-- 仓库 `testdata/` 的 3 首测试曲用于演示多曲切歌；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。
+- 本地 `testdata/` 的 3 首测试曲用于演示多曲切歌（音频文件被 `.gitignore` 排除）；更多曲目可直接追加到 `/sdcard/Music/` 后重启应用重新扫描。
