@@ -19,6 +19,10 @@ android {
     }
 
     buildTypes {
+        debug {
+            // 第七章要求：为单元测试生成 JaCoCo 覆盖率报告。
+            enableUnitTestCoverage = true
+        }
         release {
             optimization {
                 enable = false

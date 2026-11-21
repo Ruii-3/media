@@ -5,7 +5,8 @@
 - 包名：`com.example.automediaplayer`
 - 版本：`versionCode=6`、`versionName=6.0`
 - 测试命令：`.\gradlew.bat test --console=plain`（Linux/macOS 等价 `./gradlew test`）
-- 原始日志：`docs/cp6_test_run.log`
+- 原始日志：`docs/cp6_test_run.log`；覆盖率日志：`docs/cp6_coverage_run.log`
+- 综合报告：`docs/CP6_Test_Report.md`；Excel：`docs/integration_test_report.xlsx`
 - HTML 报告：`app/build/reports/tests/testDebugUnitTest/index.html`
 
 ## 一、总体结果
@@ -30,7 +31,33 @@
 > Robolectric 首次运行需要下载 `android-all` 运行时，`AudioFocusManagerTest` 首次耗时约 137 秒；
 > 依赖预热后重复执行在秒级完成，属于正常现象，不是测试卡死。
 
-## 二、测试框架与依赖
+## 二、覆盖率结果
+
+教材 5.1.1 要求使用 `createDebugCoverageReport` 生成覆盖率报告。本工程已开启
+`debug { enableUnitTestCoverage = true }`，执行：
+
+```powershell
+.\gradlew.bat createDebugCoverageReport
+# 报告：app/build/reports/coverage/test/debug/index.html
+```
+
+| 被测类 | 行覆盖 | 指令覆盖 | 说明 |
+| --- | --- | --- | --- |
+| `PlaylistManager` | 88.9%（64/72） | 79.4%（390/491） | 队列主流程、模式、边界覆盖充分 |
+| `StateManager` | 79.5%（31/39） | 72.2%（127/176） | 保存/读取/清理/过期判断 |
+| `AudioFocusManager` | 未采集* | 未采集* | 7 例行为测试通过，四态覆盖 |
+| `MyPlaybackState` | 100%（9/9） | 100%（87/87） | 数据模型与有效性判断 |
+| `MusicData` | 71.4%（10/14） | 39.3%（46/117） | 时长格式化被间接覆盖 |
+| 全工程 | 5.5%（123/2218） | 6.4%（722/11296） | 含未做 JVM 测试的 UI/Service/Adapter |
+
+`*` JaCoCo 对 Robolectric 沙箱类加载器加载的类未记录探针，因此
+`AudioFocusManager` 的行覆盖率显示为 0/未采集；这不代表没有测试。其四类焦点回调
+（GAIN/LOSS/TRANSIENT/CAN_DUCK）均有行为断言，7 例全部通过。报告中不使用虚构的
+95%/92%/90% 数字，避免把工具限制误写成质量结论。
+
+核心两类（PlaylistManager + StateManager）合计行覆盖 85.6%（95/111），
+是本周质量结论的主要依据。
+## 三、测试框架与依赖
 
 `app/build.gradle.kts` 增加：
 
@@ -56,7 +83,7 @@ testOptions {
 | Robolectric | 在 JVM 提供 Android 12（SDK 31）环境，跑 `AudioFocusRequest` 与真实 SharedPreferences |
 | androidx.test:core | `ApplicationProvider` 获取 Robolectric Application Context |
 
-## 三、PlaylistManagerTest（13 例）
+## 四、PlaylistManagerTest（13 例）
 
 | 用例 | 断言的行为/状态 |
 | --- | --- |
@@ -77,7 +104,7 @@ testOptions {
 设计要点：固定 3 首测试歌曲，所有断言只依赖 id、位置、列表内容等公开行为，
 不依赖 `Random` 的具体取值，因此可重复执行。
 
-## 四、AudioFocusManagerTest（7 例）
+## 五、AudioFocusManagerTest（7 例）
 
 | 用例 | 断言的行为/状态 |
 | --- | --- |
@@ -93,7 +120,7 @@ testOptions {
 `ReflectionHelpers.setField` 注入私有 `audioManager`，`callInstanceMethod` 触发私有
 `dispatchFocusChange`，从而在不接触真实音频设备的情况下验证四态。
 
-## 五、StateManagerTest（8 例）
+## 六、StateManagerTest（8 例）
 
 | 用例 | 断言的行为/状态 |
 | --- | --- |
@@ -106,7 +133,7 @@ testOptions {
 | `missingTimestampIsExpired` | 时间戳缺失视为过期 |
 | `playbackStateRequiresPositiveMusicId` | 歌曲 id 必须为正数 |
 
-## 六、PlaybackFlowIntegrationTest（3 例，跨模块）
+## 七、PlaybackFlowIntegrationTest（3 例，跨模块）
 
 | 用例 | 验证链路 |
 | --- | --- |
@@ -116,7 +143,7 @@ testOptions {
 
 这组测试使用 Robolectric 的真实 SharedPreferences，不 Mock 存储层，属于组件间集成验证。
 
-## 七、运行与查看报告
+## 八、运行与查看报告
 
 ```powershell
 .\gradlew.bat test --console=plain

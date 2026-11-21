@@ -17,7 +17,8 @@
 | 第 6 周 | CP6：单元测试、集成测试报告、最终 APK | 单元测试通过；真机集成待补测 |
 
 第 5 周验收材料见 `docs/CP5_Acceptance.md`、`docs/week5_component.png` 与 `docs/week5_focus_sequence.png`；
-第 6 周测试材料见 `docs/CP6_Acceptance.md`、`docs/CP6_Unit_Test_Report.md` 与 `docs/CP6_Integration_Test_Report.md`；
+第 6 周测试材料见 `docs/CP6_Test_Report.md`、`docs/integration_test_report.xlsx` 与 `docs/CP6_Acceptance.md`；
+分项报告见 `docs/CP6_Unit_Test_Report.md`、`docs/CP6_Integration_Test_Report.md`；
 第 4、3、2、1 周记录分别保留在 `docs/CP4_Acceptance.md`、`docs/CP3_Acceptance.md`、
 `docs/CP2_Acceptance.md`、`docs/CP1_Acceptance.md`。
 
@@ -207,11 +208,16 @@ adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的
 - 运行：`.\gradlew.bat test --console=plain`（Linux/macOS 为 `./gradlew test`）。
 - 结果：32 例、0 失败（PlaylistManager 13、AudioFocusManager 7、StateManager 8、PlaybackFlow 3、模板 1）。
 - HTML 报告：`app/build/reports/tests/testDebugUnitTest/index.html`。
+- 覆盖率：`.\gradlew.bat createDebugCoverageReport`，报告 `app/build/reports/coverage/test/debug/index.html`。
+- Excel 集成测试报告：`docs/integration_test_report.xlsx`（教材附录模板，22 条用例）。
 - 单元测试用 MockK 隔离 `Uri`，用 Mockito 隔离 `AudioManager`/`SharedPreferences`，
   用 Robolectric 在 JVM 跑 Android 12 框架；跨模块测试使用真实 SharedPreferences。
 - 集成测试初版覆盖真机安装、媒体扫描、副屏探测、硬按键服务绑定；其余 8 项待设备恢复后补测。
 ## 验收与架构材料
 
+- `docs/CP6_Test_Report.md`：单元测试 + 集成测试汇总报告（含覆盖率与结论）
+- `docs/integration_test_report.xlsx`：教材附录模板要求的 Excel 集成测试报告
+- `docs/cp6_coverage_run.log`：`createDebugCoverageReport` 原始日志
 - `docs/CP6_Acceptance.md`：CP6 四项验收清单、APK 指纹与抽问准备
 - `docs/CP6_Unit_Test_Report.md`：32 例单元/组件测试清单、框架分工与运行方式
 - `docs/CP6_Integration_Test_Report.md`：集成测试初版（真机 4 项 PASS、8 项 PENDING）

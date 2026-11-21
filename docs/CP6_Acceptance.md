@@ -5,14 +5,15 @@
 - 包名：`com.example.automediaplayer`
 - 版本：`versionCode=6`、`versionName=6.0`
 - 测试命令：`.\gradlew.bat test --console=plain`
-- 原始日志：`docs/cp6_test_run.log`
+- 原始日志：`docs/cp6_test_run.log`；覆盖率日志：`docs/cp6_coverage_run.log`
+- 覆盖率报告：`app/build/reports/coverage/test/debug/index.html`
 
 ## 一、CP6 清单对照
 
 | 编号 | 验收项 | 交付物 | 结果 |
 | --- | --- | --- | --- |
 | CP6-① | 全部单元测试通过 | 32 例 / 0 失败；HTML 报告 `app/build/reports/tests/testDebugUnitTest/index.html` | 通过 |
-| CP6-② | 集成测试报告初版 | `docs/CP6_Integration_Test_Report.md`；真机 4 项 PASS、8 项 PENDING；JVM 跨模块 3 项 PASS | 初版完成（真机待补测） |
+| CP6-② | 集成测试报告初版 | `docs/integration_test_report.xlsx`（教材附录模板）；`docs/CP6_Test_Report.md`；`docs/CP6_Integration_Test_Report.md` | 初版完成（7 PASS / 15 NA，真机待补测） |
 | CP6-③ | 最终 APK | `app/build/outputs/apk/debug/app-debug.apk`（6.0） | 通过（构建） |
 | CP6-④ | 抽问测试设计与断言原则 | 本文第三节 | 已准备 |
 
@@ -35,6 +36,11 @@ APK 指纹：
 | `PlaybackFlowIntegrationTest` | 3 | 0 | 切歌 → 持久化 → 重建恢复；循环模式；清理后不可恢复 |
 | `ExampleUnitTest` | 1 | 0 | 模板冒烟 |
 | **合计** | **32** | **0** | 无失败、无错误、无跳过 |
+
+覆盖率（`createDebugCoverageReport`）：PlaylistManager 行覆盖 88.9%、StateManager 79.5%、
+两者合计 85.6%；全工程行覆盖 5.5%（UI/Service/Adapter 尚未纳入 JVM 测试）。
+AudioFocusManager 的 7 例行为测试全部通过，但 JaCoCo 对 Robolectric 沙箱类未记录行覆盖，
+报告中标注为“未采集”，不能等同于未测试。
 
 任务覆盖：
 

@@ -7,10 +7,13 @@
 - 真机：瑞特 `ITX_3588J`，序列号 `C5203027DC6E1CE5`
 - 系统：Android 12（API 32），1920×720，density 213
 - 测试方式：真机黑盒 + adb 取证；跨模块链路补充 Robolectric 组件集成测试
+- 配套 Excel：`docs/integration_test_report.xlsx`（教材附录模板，22 条细粒度用例，7 PASS / 15 NA）
+- 覆盖率报告：`app/build/reports/coverage/test/debug/index.html`
 
 > 设备状态说明：真机在完成“安装/媒体扫描/副屏探测/硬按键服务绑定”后从 adb 掉线，
 > `adb devices` 为空。本文把已执行项和待补测项分开记录，未执行项不写成“通过”。
-> 设备恢复后按第六节命令继续，即可把本报告升级为正式版。
+> 设备恢复后按第六节命令继续，即可把本报告升级为正式版。Excel 将“双屏列表/控制/状态/焦点”等
+> 拆成 22 条细粒度用例，所以 NA 计数为 15；本报告按核心场景合并为 8 项待补测。
 
 ## 一、测试环境
 
@@ -113,8 +116,11 @@ adb logcat -v time -s HardKey HardKeyPolicyManager MusicPlayService
 
 ## 七、证据清单
 
+- `docs/integration_test_report.xlsx`：教材附录模板要求的 Excel 集成测试报告。
+- `docs/CP6_Test_Report.md`：单元+集成测试汇总报告。
 - `docs/cp6_real_device_main.png`：真机主界面，显示“共 8 首”和紫藤色 UI。
 - `docs/cp6_test_run.log`：`gradlew test` 原始运行日志。
+- `docs/cp6_coverage_run.log`：覆盖率任务原始日志。
 - `app/build/test-results/testDebugUnitTest/*.xml`：32 例测试的机器可读结果。
 - `app/build/reports/tests/testDebugUnitTest/index.html`：HTML 测试报告。
 - 设备信息、MediaStore、display、hardkey 服务输出：见本文第一、三节命令。
