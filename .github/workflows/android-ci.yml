@@ -117,7 +117,7 @@ jobs:
             -no-window -no-snapshot -noaudio -no-boot-anim
             -gpu swiftshader_indirect
           # emulator-runner 的 script 按行执行，命令必须保持单行，不能使用行尾反斜杠续行。
-          script: ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace --console=plain
+          script: chmod +x gradlew && ./gradlew :app:connectedDebugAndroidTest --no-daemon --stacktrace --console=plain
 
       - name: Upload instrumented test report
         if: always()
