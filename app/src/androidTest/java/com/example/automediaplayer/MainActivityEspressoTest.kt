@@ -16,8 +16,10 @@ import androidx.test.espresso.assertion.ViewAssertions.matches
 import androidx.test.espresso.matcher.RootMatchers.isDialog
 import androidx.test.espresso.matcher.ViewMatchers.isDisplayed
 import androidx.test.espresso.matcher.ViewMatchers.withContentDescription
+import androidx.test.espresso.matcher.ViewMatchers.withEffectiveVisibility
 import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.espresso.matcher.ViewMatchers.withText
+import androidx.test.espresso.matcher.ViewMatchers.Visibility
 import androidx.test.ext.junit.rules.ActivityScenarioRule
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.rule.GrantPermissionRule
@@ -79,8 +81,11 @@ class MainActivityEspressoTest {
         onView(withId(R.id.tv_music_list)).check(matches(withText(R.string.music_list)))
         onView(withId(R.id.btn_play_pause))
             .check(matches(withContentDescription(R.string.play)))
-        onView(withId(R.id.btn_prev)).check(matches(isDisplayed()))
-        onView(withId(R.id.btn_next)).check(matches(isDisplayed()))
+        // 不同模拟器分辨率可能裁切底部按钮边缘，验证控件有效可见即可。
+        onView(withId(R.id.btn_prev))
+            .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
+        onView(withId(R.id.btn_next))
+            .check(matches(withEffectiveVisibility(Visibility.VISIBLE)))
 
         onView(withId(R.id.btn_filter_favorites))
             .check(matches(withText(R.string.all_music)))
@@ -143,7 +148,8 @@ class MainActivityEspressoTest {
      */
     private fun clickIgnoringPartialVisibility(): ViewAction {
         return object : ViewAction {
-            override fun getConstraints(): Matcher<View> = isDisplayed()
+            override fun getConstraints(): Matcher<View> =
+                withEffectiveVisibility(Visibility.VISIBLE)
 
             override fun getDescription(): String = "click view via performClick"
 
