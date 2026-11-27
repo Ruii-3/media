@@ -18,6 +18,7 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.IBinder
 import android.os.Looper
+import android.os.Process
 import android.os.ResultReceiver
 import android.os.SystemClock
 import android.service.media.MediaBrowserService
@@ -32,6 +33,7 @@ import com.example.automediaplayer.manager.StateManager
 import com.example.automediaplayer.model.MusicData
 import com.example.automediaplayer.model.MyPlaybackState
 import com.example.automediaplayer.model.PlayMode
+import com.example.automediaplayer.security.MediaBrowserAccessPolicy
 import com.example.automediaplayer.ui.MainActivity
 import com.example.automediaplayer.ui.USBStatusCallback
 import com.example.automediaplayer.ui.USBStorageObserver
@@ -391,9 +393,22 @@ class MusicPlayService : MediaBrowserService() {
         callingPackage: String,
         clientUid: Int,
         rootHints: Bundle?
-    ): BrowserRoot {
+    ): BrowserRoot? {
         Log.d(TAG, "onGetRoot: pkg=$callingPackage uid=$clientUid")
-        // 课程阶段允许本应用和系统媒体框架浏览；量产项目可在此校验包名/Uid 白名单。
+        // 双层校验：Manifest 的 signature 权限先限制绑定，这里再拒绝伪造包名/UID。
+        val trusted = MediaBrowserAccessPolicy.isTrustedClient(
+            callingPackage = callingPackage,
+            clientUid = clientUid,
+            ownerPackage = packageName,
+            ownerUid = Process.myUid()
+        )
+        if (!trusted) {
+            Log.w(
+                TAG,
+                "onGetRoot denied: pkg=$callingPackage uid=$clientUid ownerUid=${Process.myUid()}"
+            )
+            return null
+        }
         return BrowserRoot(MEDIA_ROOT_ID, null)
     }
 

@@ -91,4 +91,8 @@
     <string name="passenger_unsupported">当前设备不支持副屏 Activity，已改为主屏演示</string>
     <string name="passenger_list_empty">副驾屏暂无可播放歌曲</string>
     <string name="passenger_songs">共 %1$d 首</string>
+
+    <!-- 扩展练习：MediaBrowser 安全 -->
+    <string name="media_browser_permission_label">绑定媒体浏览服务</string>
+    <string name="media_browser_permission_desc">仅允许同签名应用绑定并浏览本地音乐媒体树</string>
 </resources>

@@ -62,4 +62,8 @@ dependencies {
     testImplementation("org.mockito:mockito-core:4.11.0")
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(libs.androidx.junit)
+    // 扩展练习：Espresso UI 测试、ActivityScenario 与运行时权限规则。
+    androidTestImplementation(libs.androidx.test.core)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.rules)
 }

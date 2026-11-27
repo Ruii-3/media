@@ -1,5 +1,7 @@
 # AutoMediaPlayer（智能座舱本地音乐播放器）
 
+[![Android CI](https://github.com/Ruii-3/media/actions/workflows/android-ci.yml/badge.svg)](https://github.com/Ruii-3/media/actions/workflows/android-ci.yml)
+
 第 6 周：质量保证——单元测试与集成测试。应用在
 “MediaBrowserService 提供内容 + MediaController 发送控制 + MediaSession 统一广播状态”的架构上，
 已具备音频焦点、USB 热插拔、副驾屏与厂商硬按键；本周补齐 JUnit/MockK/Mockito/Robolectric
@@ -213,6 +215,19 @@ adb -s 设备序列号 push "testdata\贺一航 - 一个人的寂寞两个人的
 - 单元测试用 MockK 隔离 `Uri`，用 Mockito 隔离 `AudioManager`/`SharedPreferences`，
   用 Robolectric 在 JVM 跑 Android 12 框架；跨模块测试使用真实 SharedPreferences。
 - 集成测试初版覆盖真机安装、媒体扫描、副屏探测、硬按键服务绑定；其余 8 项待设备恢复后补测。
+
+## 扩展练习（可选）
+
+已选择完成三项：
+
+- **GitHub Actions 持续集成**：推送/PR 自动运行单元测试、构建 APK，并在模拟器执行仪器测试。
+- **Espresso UI 测试**：覆盖主界面、收藏筛选、播放设置和座舱场景演示对话框。
+- **MediaBrowser 安全测试**：签名级服务绑定权限 + `onGetRoot()` 包名/UID 双重校验。
+
+本机验证：JVM 测试 36 例通过、Android 仪器测试 6 例通过（API 37 模拟器）。
+详细实现、测试用例与运行方式见 `docs/Extended_Exercises.md`，CI 配置见
+`.github/workflows/android-ci.yml`。
+
 ## 验收与架构材料
 
 - `docs/CP6_Test_Report.md`：单元测试 + 集成测试汇总报告（含覆盖率与结论）
